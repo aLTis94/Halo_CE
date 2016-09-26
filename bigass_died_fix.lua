@@ -1,4 +1,5 @@
 --	Test
+--	This script does not work, ignore it
 
 api_version = "1.9.0.0"
 
