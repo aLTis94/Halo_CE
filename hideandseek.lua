@@ -30,8 +30,8 @@
 	seeker_blind_time = 25
 	
 	--	Where seeker will be teleported when they are blinded
-	x = 0
-	y = 0
+	x = 1000
+	y = 1000
 	z = 1000
 	
 	--	Player speeds
@@ -79,6 +79,7 @@ player_country = {}
 boost = {}
 camo = {}
 game_started = false
+round_started = false
 game_over = false
 delay = 10
 
@@ -190,7 +191,7 @@ function CheckGameMode()
 end
 
 function StartRound()
-	if(game_over) then
+	if(game_over or game_started or round_started) then
 		return false
 	end
 	
@@ -209,6 +210,8 @@ function StartRound()
 		end
 		return true
 	end
+	
+	round_started = true
 	rounds = rounds + 1
 	timer(1000, "say_all", "Round "..rounds)
 	timer(1000 * seeker_blind_time, "StartGame")
@@ -249,11 +252,12 @@ end
 
 --	Release the seekers
 function StartGame()
-	if(game_over or tonumber(get_var(0, "$pn")) < 2) then
+	if(game_over or tonumber(get_var(0, "$pn")) < 2 or game_started) then
 		return false
 	end
 	
 	say_all_languages(nil, 6)
+	round_started = false
 	game_started = true
 	for i=1,16 do
 		if(get_var(i, "$team") == "blue" and player_alive(i) ~= false) then
@@ -263,7 +267,6 @@ function StartGame()
 			boost[i] = 1
 			camo[i] = 1
 		end
-		--ChangeSpeed(i)
 	end
 end
 
@@ -275,7 +278,7 @@ function OnPlayerJoin(PlayerIndex)
 			for i=1,#spanish_speaking_countries do
 				if(string.find(location, spanish_speaking_countries[i]) ~= nil) then
 					player_country[PlayerIndex] = 1
-					return false
+					break
 				end
 			end
 		end
@@ -285,7 +288,7 @@ function OnPlayerJoin(PlayerIndex)
 		StartRound()
 	end
 	
-	timer(33, "SwitchTeam", PlayerIndex, 0)
+	timer(0, "SwitchTeam", PlayerIndex, 0)
 	say_all_languages(PlayerIndex, 8)
 	say_all_languages(PlayerIndex, 9)
 end
@@ -354,12 +357,18 @@ end
 
 function SwitchTeam(PlayerIndex, died)
 	PlayerIndex = tonumber(PlayerIndex)
+	if(round_started == true) then
+		write_byte(get_player(PlayerIndex) + 0x20, 0)
+		return false
+	elseif(died == "0") then
+		write_byte(get_player(PlayerIndex) + 0x20, 1)
+	end
 	if(get_var(PlayerIndex, "$team") == "red") then
 		if(died == "1") then
 			say_all_languages(get_var(PlayerIndex, "$name"), 7)
 			last_caught = PlayerIndex
 		end
-		execute_command("st "..PlayerIndex)
+		write_byte(get_player(PlayerIndex) + 0x20, 1)
 	end
 end
 
