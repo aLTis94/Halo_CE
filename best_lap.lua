@@ -1,41 +1,6 @@
 --	Best race lap script by aLTis (altis94@gmail.com)
 
 -- Change log
---2016-07-13:
---	Added any-order records
---	Added driver_only variable
---2016-07-14:
---	Added idp variable to set decimal places for seconds
---	Fixed resetting all times
---	Added saving/loading from a file
---	Added admin_level variable
---2016-07-16:
---	Added display_any_order_command which will display any-order times on the console
---	Added page_size variable
---	Times on the console are now displayed in pages (if there are a lot of records)
---	Fixed a small glitch with resetting times
---2016-07-17:
---	Fixed a glitch that gave passenger the record if they left the vehicle
---	Added display_on_game_over variable to show which player has the most records
---2016-07-22:
---	Added Halo PC compatibility thanks to H® Shaft (aka, Slap Happy/NerveBooger) 
---2016-07-25:
---	Added new variables to display different stats on game end
---	Records are no longer recorded on rally
---	Stats no longer show up on other gametypes
---2016-07-26:
---	Fixed a bug that displayed incorrect time on any-order mode
---	The script now records player's time every lap instead of recording player's best time only
---	Messages on game end are now sent after a short delay
---	Added time_needed_treshold variable
---2016-07-27:
---	Added RALLY_GAMETYPES variable
---	PC can't difference between normal and any-order but doesn't record rally records anymore
---	Fixed a small glitch that displayed incorrect records at game end if there were no records
---	Added anti_warp variable
---2016-07-29:
---	PC can tell difference between normal and any-order again (I think)
---	Player who holds the current record will only see time needed for all-time record
 --2016-07-30:
 --	Removed RALLY_GAMETYPES variable
 --	Modes on PC are now read correctly (thanks to Samuco)
@@ -44,6 +9,8 @@
 --	Fixed a glitch that didn't display time needed on any-order mode
 --2016-08-02
 --	Added player_limit_message_time variable
+--2016-10-07
+--	Added anti_death variable
 
 --	Configuration
 	
@@ -51,55 +18,45 @@
 	
 	--	If server has this many players then the script will not record any laps anymore
 	player_limit = 6
-	
 	--	Should players be announced if there's too many players
 	player_limit_message = true
-	
 	--	Time after game start needed to send player_limit_messages messages (in seconds)
 	player_limit_message_time = 15
 	
 	--	Player's time will not be recorded if they warped during the lap
 	anti_warp = true
+	--	If player died during a lap then their time will not be reorded
+	anti_death = true
 	
 	-- Only driver can get records
 	driver_only = true
 	
 	--	Notify player by how much time he needed to beat current record
 	current_needed_message = true
-	
 	--	Notify player by how much time he needed to beat all time record
 	all_time_needed_message = true
-	
 	--	How many seconds does player's time have to be away in order to display above messages
 	time_needed_treshold = 20
 	
 	--	Admin level required to reset times
 	admin_level = 4
-	
 	--	Command used to reset best times for all maps (must be lowercase)
 	reset_command = "reset_times"
-		
 	--	Command that displays best times on all maps (must be lowercase)
 	display_command = "times"
-	
 	--	Command that displays best any-order times on all maps (must be lowercase)
 	display_any_order_command = "times_any"
-	
 	--	How long the times will be shown after entering the command (in seconds) (will show each page for this time)
 	display_time = 5
-	
 	--	How many lines to display on the console at once?? (should be 20 or less)
 	page_size = 15
-	
 	--	Number of decimal places to display
 	idp = 2
 	
 	--	Display best player on game over
 	display_most_records_on_game_over = false
-	
 	--	Display best player on game over
 	display_current_record_on_game_over = true
-	
 	--	Display best player on game over
 	display_all_time_record_on_game_over = false
 	
@@ -132,6 +89,9 @@ function OnScriptLoad()
 	register_callback(cb['EVENT_JOIN'], "OnPlayerJoin")
 	register_callback(cb['EVENT_LEAVE'], "OnPlayerLeave")
 	register_callback(cb['EVENT_COMMAND'],"OnCommand")
+	if(anti_death) then
+		register_callback(cb['EVENT_DIE'], "OnPlayerDeath")
+	end
 	if(anti_warp) then
 		register_callback(cb['EVENT_WARP'],"OnWarp")
 	end
@@ -145,6 +105,10 @@ function OnScriptLoad()
 end
 
 function OnWarp(PlayerIndex)
+	player_warps[PlayerIndex] = 1
+end
+
+function OnPlayerDeath(PlayerIndex)
 	player_warps[PlayerIndex] = 1
 end
 
@@ -231,6 +195,9 @@ function ResetGameStarted()
 end
 
 function OnGameEnd()
+	for i = 1,16 do
+		player_warps[i] = 0
+	end
 	if(race == false or mode == 2) then
 		return false
 	end
@@ -350,7 +317,7 @@ function OnTick()--	Check players best times and compare them to current and all
 			end
 			
 			if(previous_time[i] ~= best_time and player_warps[i] == 1) then
-				say(i, "Your time was not recorded because you were warping during this lap!")
+				say(i, "Your time was not recorded because you were warping or died during this lap!")
 				player_warps[i] = 0
 			end
 			

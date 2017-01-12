@@ -465,8 +465,8 @@ function OnTick()
 							--Set biped health depending on player count
 							if(AI[ID]["time_alive"] == 100) then
 								local player_count = get_var(0, "$pn")
-								write_float(biped_object + 0xE0, 1.0 + player_count*0.1)
-								rprint(1, player_count..", health = ".. 1.0+player_count*0.1)
+								write_float(biped_object + 0xE0, 1.0 + player_count)
+								rprint(1, player_count..", health = ".. 1.0+player_count)
 							end
 						else
 							--	For some reason some of the vehicles get this, dunno how to fix yet

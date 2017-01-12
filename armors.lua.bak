@@ -158,13 +158,6 @@
 			[2] = "test2",
 			[1] = "test1",
 		},
-		["odst"] = {
-		["weapon"] = "halo3\\weapons\\odst pistol\\odst pistol",
-			[4] = "test4",
-			[3] = "test3",
-			[2] = "test2",
-			[1] = "test1",
-		},
 	}
 	
 -- End of Configuration

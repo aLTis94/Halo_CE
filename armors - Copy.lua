@@ -158,13 +158,6 @@
 			[2] = "test2",
 			[1] = "test1",
 		},
-		["odst"] = {
-		["weapon"] = "halo3\\weapons\\odst pistol\\odst pistol",
-			[4] = "test4",
-			[3] = "test3",
-			[2] = "test2",
-			[1] = "test1",
-		},
 	}
 	
 -- End of Configuration
@@ -314,7 +307,7 @@ function OnTick() --						This part checks when armor room has moved forward or 
 				if(unit_left == -1) then--		Right
 					PLAYER_INPUT[i] = input_delay
 					BIPED_WANTED[i] = BIPED_WANTED[i] + 1
-					if(BIPED_WANTED[i] > #BIPED_NUMBER-1) then
+					if(BIPED_WANTED[i] > #BIPED_NUMBER) then
 						BIPED_WANTED[i] = 0
 					end
 					ChooseBiped(i)
@@ -322,7 +315,7 @@ function OnTick() --						This part checks when armor room has moved forward or 
 					PLAYER_INPUT[i] = input_delay
 					BIPED_WANTED[i] = BIPED_WANTED[i] - 1
 					if(BIPED_WANTED[i] < 0) then
-						BIPED_WANTED[i] = #BIPED_NUMBER-1
+						BIPED_WANTED[i] = #BIPED_NUMBER
 					end
 					ChooseBiped(i)
 				elseif(unit_forward == 1) then
@@ -520,13 +513,6 @@ end
 function OnCommand(PlayerIndex,Command)--	Command that players will need to enter in order to choose armor the next time they spawn
 	Command = string.lower(Command)
 	if(choose_armor_on_command) then
-		--placeholder
-		if(Command == "99") then
-			say(PlayerIndex, "I'll have two number 9s, a number 9 large, a number 6 with extra dip, a number 7, two number 45s, one with cheese, and a large soda.")
-			CHOSEN_BIPEDS[PlayerIndex] = "smoke"
-			WANTS_TO_SWITCH[PlayerIndex] = 0
-			return false
-		end
 		if(Command == switch_command or Command == alt_switch_command or Command == alt_switch_command_2) then
 			if(ROOM_VEHICLES[PlayerIndex] == nil) then
 				if(flood_gametype == get_var(0, "$mode") and get_var(PlayerIndex, "$team") == "blue") then

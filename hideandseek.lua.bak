@@ -11,7 +11,7 @@
 	
 	--	If true then the script will only work on game_mode_name gametype
 	--	If false then it will work on any gametype. This may cause issues on incorrect gametypes
-	game_mode_required = true
+	game_mode_required = false
 	game_mode_name = "altis_ts_nr"	--This script will only work on this game mode
 	
 	

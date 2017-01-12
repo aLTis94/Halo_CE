@@ -37,7 +37,6 @@ BIPEDS =
 	["bourrin\\halo reach\\spartan\\female\\female"] = 1,
 	["cmt\\characters\\evolved_h1-spirit\\cyborg\\bipeds\\cyborg_mp"] = 2,
 	["characters\\smoke\\smoke"] = 2,
-	["impzone\\characters\\alice\\alice_mp"] = 1,
 }
 
 -- Set the base walking speed
