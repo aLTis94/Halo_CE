@@ -396,6 +396,17 @@ end
 
 --	Where magic happens
 function OnTick()
+	-- testing only
+	if false then
+		for i=1,16 do
+			if(player_alive(i) == true) then 
+				player = get_dynamic_player(i)
+				rprint(i, player)
+				--rprint(i, read_bit(player + 0x10, 3))
+			end
+		end
+	end
+	
 	if(game_over) then
 		return false
 	end
@@ -461,7 +472,7 @@ function OnTick()
 							rprint(i, "|rQuedan "..get_var(0, "$reds").." evasores")
 						else
 							rprint(i, "|rYou will be released in "..release_timer)	
-							rprint(i, "|rYou are a seeker")
+							rprint(i, "|rYou are a seeker|nc5353ff")
 							rprint(i, "|r"..get_var(0, "$reds").." hiders left")
 						end
 					end
@@ -472,7 +483,7 @@ function OnTick()
 						rprint(i, "|rQuedan "..get_var(0, "$reds").." evasores")
 					else
 						rprint(i, "|rSeekers will be released in "..release_timer)	
-						rprint(i, "|rYou are a hider")
+						rprint(i, "|rYou are a hider|ncff5353")
 						rprint(i, "|r"..get_var(0, "$reds").." hiders left")
 					end
 				end
@@ -521,10 +532,10 @@ function OnTick()
 						--rprint(i, "Your speed is "..tonumber(player_speed))
 						if(get_var(i, "$team") == "red") then
 							rprint(i, "(E) Boost: "..boost[i].."|rTime left "..math.floor(current_round_time/30))
-							rprint(i, "(F) Camo: "..camo[i].."|rYou are a hider")
+							rprint(i, "(F) Camo: "..camo[i].."|rYou are a hider|ncff5353")
 						else
 							rprint(i, "|rTime left "..math.floor(current_round_time/30))
-							rprint(i, "|rYou are a seeker")
+							rprint(i, "|rYou are a seeker|nc5353ff")
 						end
 						rprint(i, "|r"..get_var(0, "$reds").." hiders left")
 					end
