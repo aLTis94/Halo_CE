@@ -5,8 +5,9 @@
 	
 	-- GAMETYPE
 		gametype = "monster"
-		minimum_player_count = 2
-		start_delay = 5 -- seconds
+		minimum_player_count = 1
+		kill_limit = 25 -- how many players monster needs to kill
+		start_delay = 6 -- seconds
 	
 	
 	-- HUNTERS
@@ -83,6 +84,7 @@
 api_version = "1.9.0.0"
 
 game_was_started = false
+tags_found = true
 
 function OnScriptLoad()
 	network_struct = read_dword(sig_scan("F3ABA1????????BA????????C740??????????E8????????668B0D") + 3)
@@ -110,10 +112,16 @@ function OnScriptUnload()
 	end
 end
 
+function SayTagsNotFound()
+	say_all("Monster script couldn't load due to missing tags!!!")
+	return false
+end
+
 function Initialize()
 	if get_var(0, "$mode") == gametype and lookup_tag("weap", gravity_rifle) ~= 0 then
 		
-		game_was_started = true
+		tags_found = true
+		
 		flamethrower_projectile_id = GetMetaID("proj", flamethrower_projectile)
 		flamethrower_id = GetMetaID("weap", flamethrower)
 		flamethrower_replacement_id = GetMetaID("weap", flamethrower_replacement)
@@ -127,12 +135,15 @@ function Initialize()
 		oddball_id = GetMetaID("weap", "weapons\\ball\\ball")
 		nuke_id = GetMetaID("proj", nuke)
 		
-		if flamethrower_projectile_id == nil or modded_projectile_id == nil or frag_id == nil or plasma_id == nil or oddball_id == nil then
-			say_all("Monster script couldn't load due to missing tags")
+		if tags_found == false then
+			timer(4000, "SayTagsNotFound")
 			UnregisterCallbacks()
+			return
 		else
 			RegisterCallbacks()
 		end
+		
+		game_was_started = true
 		
 		location_store = sig_scan("741F8B482085C9750C")
 		if(location_store == 0) then
@@ -153,6 +164,7 @@ function Initialize()
 		game_started = false
 		game_over = false
 	elseif game_was_started then
+		timer(5500, "BalanceTeams")
 		UnregisterCallbacks()
 		EnableObjects()
 		if location_store ~= nil and location_store ~= 0  then
@@ -160,6 +172,43 @@ function Initialize()
 			write_char(location_store,116)
 			safe_write(false)
 		end
+		game_was_started = false
+	end
+end
+
+function BalanceTeams()
+	if get_var(0, "$ffa") == 1 then return end
+	
+	local RED_PLAYERS = {}
+	local BLUE_PLAYERS = {}
+	for i=1,16 do
+		if player_present(i) then
+			local team = get_var(i, "$team")
+			if team == "red" then
+				RED_PLAYERS[i] = true
+			else
+				BLUE_PLAYERS[i] = true
+			end
+		end
+	end
+	
+	local difference = #RED_PLAYERS - #BLUE_PLAYERS
+	if difference > 1 then -- more reds
+		for i,j in pairs (RED_PLAYERS) do
+			difference = difference-1
+			if difference > 0 then
+				execute_command("st "..i.." blue")
+			end
+		end
+		say_all("Teams were balanced!")
+	elseif difference < -1 then -- more blues
+		for i,j in pairs (BLUE_PLAYERS) do
+			difference = difference+1
+			if difference < 0 then
+				execute_command("st "..i.." red")
+			end
+		end
+		say_all("Teams were balanced!")
 	end
 end
 
@@ -233,6 +282,8 @@ function Begin()
 		end
 		
 		timer(33, "AnnounceMonster")
+		
+		execute_command("scorelimit 100000")
 		
 		if debug_mode == false then
 			for i=1,16 do
@@ -316,6 +367,17 @@ function OnTick()
 							end
 						end
 					end
+				end
+			end
+			
+			local team = get_var(i, "$team")
+			if i==monster then
+				if team ~= "red" then
+					execute_command("st "..i.." red")
+				end
+			else
+				if team ~= "blue" then
+					execute_command("st "..i.." blue")
 				end
 			end
 		end
@@ -421,7 +483,7 @@ function OnTick()
 				end
 			end
 		end
-	else
+	elseif game_over == false then
 		CheckPlayerCount()
 	end
 	
@@ -445,17 +507,14 @@ function OnPlayerJoin(i)
 end
 
 function OnPlayerLeave(i)
-	if game_started then
+	if game_started and game_over == false then
 		if i == monster then
 			DeletePlayer(i)
-			--if tonumber(get_var(0, "$pn")) >= 0 then
-			--	PickRandomPlayer()
-				--execute_command("st * blue")
-				--execute_command("st "..monster.." red")
-			--else
-				game_started = false
-				execute_command("sv_map_next")
-			--end
+			if game_started then
+				Begin()
+			end
+			game_started = false
+			--execute_command("sv_map_next")
 		end
 	end
 end
@@ -464,11 +523,15 @@ function OnGameEnd()
 	if game_started then
 		if monster ~= nil then
 			say_all("The monster has won...")
+			--execute_command("score "..monster.." 1")
+			execute_command("team_score red 1")
+			execute_command("team_score blue 0")
 		end
 		game_started = false
 		game_over = true
 		monster = nil
 		ResetMonsterStats()
+		EnableObjects()
 		for i=1,16 do
 			ClearConsole(i)
 		end
@@ -476,16 +539,26 @@ function OnGameEnd()
 	UnregisterCallbacks()
 end
 
-function OnPlayerDeath(i)
+function OnPlayerDeath(i, j)
 	if game_started then
 		if i == monster then
 			say_all("The monster has been defeated!")
 			game_started = false
 			monster = nil
-			execute_command("sv_map_next")
+			game_over = true
+			--execute_command("sv_map_next")
+			execute_command("scorelimit 0")
+			execute_command("team_score red 0")
+			execute_command("team_score blue 1")
 		else
 			local ID = spawn_object("weap", "ball", PLAYER_HEAD_POSITION[i].x, PLAYER_HEAD_POSITION[i].y, PLAYER_HEAD_POSITION[i].z, 0, oddball_id)
 			SKULLS[ID] = true
+			
+			if tonumber(get_var(j,"$kills")) >= kill_limit then
+				execute_command("scorelimit 0")
+				execute_command("team_score red 1")
+				execute_command("team_score blue 0")
+			end
 		end
 	end
 end
@@ -550,7 +623,7 @@ function OnDamage(i, causer, tagID, damage, material, backtap)
 			elseif tagID == vehicle_dmg_id then
 				return true, 40
 			else
-				execute_command("kills "..causer.." +"..damage)
+				execute_command("score "..causer.." +"..damage)
 				if backtap ~= 0 then
 					local player = get_dynamic_player(monster)
 					if player ~= 0 then
@@ -648,7 +721,7 @@ function HUD()
 								end
 								rprint(i, "|c"..string.upper(get_var(monster, "$name")).."'S HEALTH"..color_red)
 							end
-							rprint(i, "|c<"..PrintBar(health, max_health, 65, "left")..">"..color_red)
+							rprint(i, "|c<"..PrintBar(health, max_health, 60, "left")..">"..color_red)
 						end
 					end
 				else
@@ -699,8 +772,13 @@ end
 
 function GetMetaID(object_type, object_dir)
 	local address = lookup_tag(object_type,object_dir)
-	if(address ~= 0) then
+	if address ~= 0 then
 		return read_dword(address + 0xC)
+	else
+		for i=0,15 do
+			rprint(i, "MISSING "..object_dir)
+		end
+		tags_found = false
 	end
 	return nil
 end

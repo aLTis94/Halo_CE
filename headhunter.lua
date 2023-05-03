@@ -12,7 +12,6 @@
 	rules_message = "Collect skulls from dead players and bring them to the hill to score" -- this will be distplayed on the console
 	player_in_hill_message = "Collect skulls from dead enemies to score!" -- this is sent if a player stays in the hill for a while
 	
-	play_hill_controlled_sound = true
 	print_stats_to_console = true
 	
 	-- console colors change based on actions
@@ -93,9 +92,10 @@ function OnPlayerDeath(i, causer)
 	-- drop skulls
 	if PLAYER[i].x ~= nil then
 		local killed = 1
-		if i == causer or causer < 1 or get_var(i, "$team") == get_var(causer, "$team") then
+		if i == causer or causer < 1 or GetTeamID(i) == GetTeamID(causer) then
 			killed = 0
 		end
+		--console(get_var(i, "$name").." (team".. got killed by "..get_var(causer, "$name"))
 		
 		for j=1,PLAYER[i].skulls+killed do
 			math.randomseed(j*i)
@@ -132,7 +132,7 @@ function PrintStats()
 	if print_stats_to_console then
 		if get_var(0, "$ticks")%10 == 1 then
 			for i=1,16 do
-				if player_alive(i) then
+				if CheckArmorRoom(i) then
 					ClearConsole(i)
 					
 					if PLAYER[i].display_rules_timer > 0 then
@@ -141,16 +141,16 @@ function PrintStats()
 					else
 						rprint(i, "|rENEMY:     "..console_color_default)
 						for j=1,16 do
-							if player_present(j) and get_var(i, "$team")~=get_var(j, "$team") and PLAYER[j].skulls > 0 then
+							if player_present(j) and GetTeamID(i)~=GetTeamID(j) and PLAYER[j].skulls > 0 then
 								rprint(i, "|r"..get_var(j, "$name")..":   "..PLAYER[j].skulls..console_color_enemy)
 							end
 						end
 						
 						
 						if get_var(0, "$ffa")=="0" and ((get_var(i, "$team")=="red" and get_var(i, "$reds")~="0") or (get_var(i, "$team")=="blue" and get_var(i, "$blues")~="0")) then
-							rprint(i, "|rTEAM:     "..console_color_default)
+							rprint(i, "|rALLY:     "..console_color_default)
 							for j=1,16 do
-								if player_present(j) and get_var(i, "$team")==get_var(j, "$team") and i~=j and PLAYER[j].skulls > 0 then
+								if player_present(j) and GetTeamID(i)==GetTeamID(j) and i~=j and PLAYER[j].skulls > 0 then
 									rprint(i, "|r"..get_var(j, "$name")..":   "..PLAYER[j].skulls..console_color_teammate)
 								end
 							end
@@ -165,12 +165,20 @@ function PrintStats()
 						end
 					end
 				else
-					if player_present(i) then
-						ClearConsole(i)
-					end
+					PLAYER[i].skulls = 0
+					--if player_present(i) then
+					--	ClearConsole(i)
+					--end
 				end
 			end
 		end
+	end
+end
+
+function GetTeamID(i)
+	local m_player = get_player(i)
+	if m_player ~= 0 then
+		return read_byte(m_player + 0x20)
 	end
 end
 
@@ -178,6 +186,19 @@ function ClearConsole(i)
 	for j=1,25 do
 		rprint(i, " ")
 	end
+end
+
+function CheckArmorRoom(i)
+	if string.find(get_var(0,"$map"), "bigass") ~= nil then
+		local player = get_dynamic_player(i)
+		if player ~= 0 then
+			local vehicle = get_object_memory(read_dword(player + 0x11C))
+			if vehicle ~= 0 and GetName(vehicle) == "altis\\scenery\\armor_room\\armor_room" then
+				return false
+			end
+		end
+	end
+	return true
 end
 
 function SetScore()
@@ -242,6 +263,7 @@ function RemoveSkullFromPlayer(i, player)
 				destroy_object(weapon_id)
 				PLAYER[i].skulls = PLAYER[i].skulls + 1
 				PLAYER[i].console_color = console_color_grabbed
+				PlayAnnouncerSound(42)
 			end
 		end
 	end
@@ -267,10 +289,7 @@ function PlayerInHill(i, player)
 					TEAM_SCORE.blue = TEAM_SCORE.blue + PLAYER[i].skulls
 				end
 				
-				if play_hill_controlled_sound then
-					write_dword(koth_globals + 0x190, i+1)
-					write_dword(koth_globals + 0x194, 299)
-				end
+				PlayAnnouncerSound(26)
 			else
 				if PLAYER[i].skulls > 1 then
 					say_all(get_var(i, "$name").." scored "..PLAYER[i].skulls.." skulls!")
@@ -278,10 +297,7 @@ function PlayerInHill(i, player)
 					say_all(get_var(i, "$name").." scored "..PLAYER[i].skulls.." skull!")
 				end
 				
-				if play_hill_controlled_sound then
-					write_dword(koth_globals + 0x190, 1)
-					write_dword(koth_globals + 0x194, 299)
-				end
+				PlayAnnouncerSound(26)
 			end
 			
 			PLAYER[i].skulls = 0
@@ -296,4 +312,20 @@ function PlayerInHill(i, player)
 	else
 		PLAYER[i].hill_timer = 0
 	end
+end
+
+function PlayAnnouncerSound(sound_id)
+	local server_announcer_address = 0x5BDE00
+	write_dword(server_announcer_address + 0x8, 1) -- time until first sound in the queue stops playing
+	write_dword(server_announcer_address + 0x14, sound_id) -- second sound ID in the queue (from globals multiplayer information > sounds)
+	write_dword(server_announcer_address + 0x1C, 1) -- second sound in the queue will play
+	write_dword(server_announcer_address + 0x50, 2) -- announcer sound queue
+end
+
+function OnError(Message)
+	say_all("Error!"..Message)
+end
+
+function GetName(DynamicObject)--	Gets directory + name of the object
+	return read_string(read_dword(read_word(DynamicObject) * 32 + 0x40440038))
 end

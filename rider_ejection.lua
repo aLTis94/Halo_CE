@@ -13,7 +13,7 @@ ejection_delay = 2*30
 check_velocities = true
 
 --	How fast can the vehicle be moving
-max_velocity = 0.1
+max_velocity = 0.3
 
 --	END OF CONFIG
 
@@ -30,10 +30,12 @@ function OnScriptLoad()
 end
 
 function OnTick()
+	if lookup_tag("senv", "altis\\levels\\halo\\shaders\\halo outer ring bsp") ~= 0 then return end
+	
 	for i=1,16 do
-		if(player_alive(i) == true) then 
-			local player_object = get_dynamic_player(i)
-			local object_id = read_dword(player_object + 0x11C)
+		local player = get_dynamic_player(i)
+		if player ~= 0 then 
+			local object_id = read_dword(player + 0x11C)
 			local object = get_object_memory(object_id)
 			
 			if(IsVehicleFlipped(object) and CheckVelocities(object)) then
@@ -47,7 +49,6 @@ function OnTick()
 				exit_vehicle(i)
 				TIMERS[i] = 0
 			end
-			
 			if(debug_mode == true) then rprint(i, TIMERS[i]) end
 		end
 	end

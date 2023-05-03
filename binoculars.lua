@@ -13,7 +13,7 @@
 
 debug_mode = false
 
-infinite_ammo = true
+infinite_ammo = false
 
 WEAPON_TAG = "altis\\weapons\\binoculars\\binoculars"
 CONFIRM_TAG = "altis\\weapons\\binoculars\\warthog_confirm"

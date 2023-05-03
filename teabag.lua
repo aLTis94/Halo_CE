@@ -72,8 +72,11 @@ function OnTick()
 
 end
 
-function RemoveSoundObject(ObjectID)
-	destroy_object(ObjectID)
+function RemoveSoundObject(ID)
+	ID = tonumber(ID)
+	if get_object_memory(ID) ~= 0 then
+		destroy_object(ID)
+	end
 end
 
 function OnDie(PlayerIndex,KillerIndex)

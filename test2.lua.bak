@@ -1,0 +1,116 @@
+
+--CONFIG
+	command_name = "l"
+	minimum_range = 3
+--END OF CONFIG
+
+api_version = "1.9.0.0"
+
+vehicle_thing = nil
+
+function OnScriptLoad()
+	register_callback(cb['EVENT_COMMAND'],"OnCommand")
+	--register_callback(cb["EVENT_TICK"],"OnTick")
+	object_table_ptr = sig_scan("8B0D????????8B513425FFFF00008D")
+	vehicle_thing = spawn_object("vehi", "bourrin\\halo reach\\spartan\\male\\117 test", -116.46, -65.6163, 1.073)
+	timer(1000, "SwitchWeapon")
+end
+
+function SwitchWeapon()
+	local vehicle = get_object_memory(vehicle_thing)
+	if vehicle == 0 then return false end
+	local weapon = read_dword(vehicle + 0x118)
+	local random_number = rand(0,3)
+	--rprint(1, read_word(vehicle + 0x2F4))
+	--write_word(vehicle + 0x2F4, random_number)
+	--local new_id = spawn_object("weap", "bourrin\\weapons\\assault rifle", 0, 0, 10)
+	--local new_weapon = get_object_memory(new_id)
+	if new_weapon ~= 0 then
+		rprint(1, "changed")
+		--write_dword(vehicle + 0x118, new_weapon)
+		--write_dword(vehicle + 0x2F8 + 1*4, new_id)
+	end
+	return true
+end
+
+function OnTick()
+	for i=1,16 do
+		if player_alive(i) then
+			local player = get_dynamic_player(i)
+			local x, y, z = read_vector3d(player + 0x5C)
+			local x_vel, y_vel, z_vel = read_vector3d(player + 0x68)
+			local pitch, yaw, roll = read_vector3d(player + 0x74)
+			local network_struct = read_dword(sig_scan("F3ABA1????????BA????????C740??????????E8????????668B0D") + 3)
+			local client_machineinfo_struct = network_struct + 0x3B8+0x40 + to_real_index(i) * 0xEC
+			local action_key_all = read_bit(player + 0x209, 6)
+			if action_key_all == 1 then
+				write_vector3d(player + 0x5C, x, y, z + 1)
+				write_vector3d(player + 0x68, x_vel + pitch * 0.01, y_vel + yaw*0.01, z_vel)
+			end
+			execute_command("t "..i.." "..x.." "..y.." "..z)
+		end
+	end
+end
+
+function OnCommand(PlayerIndex,Command,Environment,Password)
+	Command = string.lower(Command)
+	if command_name == Command then
+		local nearest_distance = minimum_range
+		local nearest_object = nil
+		local hit, x, y, z = GetPlayerAimLocation(PlayerIndex)
+		if hit == true then
+			say(PlayerIndex, "You are aiming at the wrong place.")
+			return false
+		end
+		local object_table = read_dword(read_dword(object_table_ptr + 2))
+		local object_count = read_word(object_table + 0x2E)
+		local first_object = read_dword(object_table + 0x34)
+		for i=0,object_count-1 do
+			local object = read_dword(first_object + i * 0xC + 0x8)
+			if object ~= 0 and object ~= 0xFFFFFFFF then
+				if read_word(object + 0xB4) == 1 then
+					x1, y1, z1 = read_vector3d(object + 0x5C)
+					local distance = DistanceFormula(x1,y1,z1,x,y,z)
+					if distance < nearest_distance then
+						nearest_distance = distance
+						nearest_object = object
+					end
+				end
+			end
+		end
+		if nearest_object ~= nil then
+			say(PlayerIndex, "The vehicle has been respawned.")
+			local x2, y2, z2 = read_vector3d(nearest_object + 0x5B4)
+			write_bit(nearest_object + 0x10, 5, 0)
+			write_vector3d(nearest_object + 0x68, 0, 0, 0.001)
+			write_vector3d(nearest_object + 0x5C, x2, y2, z2)
+			--write_vector3d(nearest_object + 0x590, 0, 0, 0)
+			--rprint(1, read_float(nearest_object + 0x52C))
+			--rprint(1, read_float(nearest_object + 0x5C))
+		else
+			say(PlayerIndex, "There's no vehicle where you're aiming")
+		end
+		return false
+	end
+	return true
+end
+
+function GetPlayerAimLocation(PlayerIndex)--	Finds location where player is looking, from giraffe's script
+	local player = get_dynamic_player(PlayerIndex)
+	local px, py, pz = read_vector3d(player + 0x5c)
+    local vx, vy, vz = read_vector3d(player + 0x230)
+    local cs = read_float(player + 0x50C)
+    local h = 0.62 - (cs * (0.62 - 0.35))
+    pz = pz + h
+	local hit, x, y , z = intersect(px, py, pz, 10000*vx, 10000*vy, 10000*vz, read_dword(get_player(PlayerIndex) + 0x34))
+	local distance = math.sqrt(((x-px)*(x-px)) + ((y-py)*(y-py)) + ((z-pz)*(z-pz)) ) - 0.1
+	return intersect(px, py, pz, distance*vx, distance*vy, distance*vz, read_dword(get_player(PlayerIndex) + 0x34))
+end
+
+function DistanceFormula(x1,y1,z1,x2,y2,z2)-- Made by 002
+    return math.sqrt(math.pow(x1 - x2,2) + math.pow(y1 - y2,2) + math.pow(z1 - z2,2))
+end
+
+function OnScriptUnload() 
+	destroy_object(vehicle_thing)
+end

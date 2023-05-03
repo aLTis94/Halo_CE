@@ -4,39 +4,64 @@
 
 --NOTES!
 
---	Need to test if item queue actually works
---	Several players need to buy items at once and check if correct items drop
-
---	Could try removing all zombie vehicles every second via map scripts instead of manually removing them
-
---	Could try removing all synced projectiles that cause damage effects (since that causes exceptions)
---	It seems like all weapons except for binoculars already had client side only projectiles
-
 
 --	CONFIG
+	projectile_rate = 5			--How often projectile position updates. Default is 15
+	ai_position_rate = 4		--How often AI position updates in ticks. Default is 4, setting below 4 causes desync
+	ai_animation_rate = 11		--How often AI animation states are updated in ticks. Setting this to low values
+									--will cause AI to turn to T pose more often
+	ignore_rate = true	--Ignore the above value and change animations instantly
 	flood_gametype = "survival"
 --BIPEDS
-	tag_directory= "characters\\floodcombat_human\\"	--where all of your biped tags are.
-	biped        = tag_directory.."floodcombat_human" 	--the biped you want to sync
-	dead_weapon  = tag_directory.."dead_zombie" 		--weapon that will be used to fake a dead biped
-
-	-- Biped animation state and corresponding vehicle tag. The comments tell you which animations those are
-	BIPED_ANIMATION_STATE = {
-		[0] = "flood_vehicle",    			--idle
-		[4] = "flood_vehicle walking",  	--walking
-		[20]= "flood_vehicle leap_airborne",--airborne
-		[21]= "flood_vehicle walking",  			--land_soft
-		[22]= "flood_vehicle walking",  			--land_hard
-		[23]= "flood_vehicle",    			--ping
-		[24]= "flood_vehicle kill_back", 	--airborne dead
-		[25]= "flood_vehicle kill_back", 	--dead
-		[30]= "flood_vehicle melee",  		--melee
-		[31]= "flood_vehicle melee",  		--melee airborne
-		[34]= "flood_vehicle resurrect", 	--resurrect front
-		[35]= "flood_vehicle resurrect", 	--resurrect back
-		[39]= "flood_vehicle leap_start", 	--leap start
-		[40]= "flood_vehicle leap_airborne",--leap airborne
-		[41]= "flood_vehicle melee", 		--leap melee
+	ai_dir = "ai\\"
+	veh_dir = "\\veh\\"
+	biped_dir = "\\biped"
+	ai_check_tag = "ai\\all_ai"
+	dead_tag = "\\dead"
+	
+	BIPEDS = {
+		["floodcombat_human"] = {
+			["id"] = 0,
+			["score"] = 10,			--how much score you get for killing this biped
+			[0] = "idle",    		--idle
+			[4] = "walking",  		--walking
+			[20]= "walking",		--airborne
+			[21]= "walking",  		--land_soft
+			[22]= "walking",  		--land_hard
+			[23]= "idle",    		--ping
+			[24]= "kill_back", 		--airborne dead
+			[25]= "kill_back", 		--dead
+			[30]= "melee",  		--melee
+			[31]= "melee",  		--melee airborne
+			[34]= "resurrect", 		--resurrect front
+			[35]= "resurrect", 		--resurrect back
+			[39]= "leap_airborne", 	--leap start
+			[40]= "leap_airborne",	--leap airborne
+			[41]= "melee", 			--leap melee
+		},
+		["elite"] = {
+			["id"] = 0,
+			["score"] = 10,			--how much score you get for killing this biped
+			[0] = "idle",    		--idle
+			[4] = "move-front",  		--walking front
+			[5] = "move-back",  		--walking back
+			[6] = "move-left",  		--walking left
+			[7] = "move-right",  		--walking right
+			[20]= "move-front",		--airborne
+			[21]= "move-front",  		--land_soft
+			[22]= "move-front",  		--land_hard
+			[23]= "idle",    		--ping
+			[24]= "idle", 		--airborne dead
+			[25]= "idle", 		--dead
+			[29]= "berserk", 		--impulse??? seems to happen when AI dives or something, no idea which animation to use here
+			[30]= "melee",  		--melee
+			[31]= "melee",  		--melee airborne
+		}
+	}
+	
+	NO_VELOCITY_STATES = {
+		[0] = 1,	--idle
+		[23] = 1,	--ping
 	}
 	
 --VEHICLES
@@ -98,8 +123,7 @@
 --SHOP
 	shop_capsule = "altis\\weapons\\capsule\\falling capsule"-- Capsule tag; items will spawn on this object
 	shop_item_location = "altis\\weapons\\capsule\\item_spawn_location"-- This tag will be used to determine where item should spawn (on a capsule)
-	zombie_kill_normal = 10-- How much money you get for killing a common zombie
-	player_kill_penalty = 150-- How much money player loses for killing another player
+	player_kill_normal = 50-- How much money player loses for killing another player
 	
 	--	Shop items; v[1] = name, v[2] = price, v[3] = tag type , v[4+] = tag directory
 	SHOP = {
@@ -125,25 +149,20 @@
 		weapon_drop_command = {"drop", "d","tirar","soltar"}-- Command that will drop player's weapon
 		
 		--Commands for admins
-		debug_mode = false--	Default state of debug_mode
 		debug_command = "ai_debug"--	Command used to change debug mode state
 		score_command = "score"--	Command to change player's score
-		wave_time = 50-- Time until new wave of zombies spawns (seconds)
 		wave_time_command = "wave_time"--	Command used to change wave time
 		wave_start_command = "wave_start"-- Command used to start waves (stops previous waves if they were still running)
-		ai_max = 100 --	Maximum number of AI, exceeding this limit will destroy any zombie bipeds that are created (should be below 150)
 		ai_max_command = "ai_limit"--	Command used to change AI limit 
-		ai_life_time = 420 * 30--	After this time the biped will be removed (seconds)
 		ai_life_time_command = "ai_life_time"--	Command used to change AI life time
-		ai_deletion_distance = 20--	Distance that AI must be away from the player in order to get deleted (world units)
-		ai_purge_rate = 10--	How often to remove all AI vehicles (in seconds)
-		player_death_zombie_spawn = true--	Should a zombie spawn where a player died?
+		
+		debug_mode = false--	Default state of debug_mode
+		wave_time = 50-- Time until new wave of zombies spawns (seconds)
+		ai_max = 100 --	Maximum number of AI, exceeding this limit will destroy any zombie bipeds that are created (should be below 150)
+		ai_life_time = 420 * 30--	After this time the biped will be removed (seconds)
+		ai_deletion_distance = 40--	Distance that AI must be away from the player in order to get deleted (world units)
 		
 		player_lives = 3--	After how many deaths player will become a zombie
-		
-		ai_position_update_rate = 3		--How often AI position updates in ticks. Default is 4, setting below 4 causes desync
-		ai_animation_update_rate = 11	--How often AI animation states are updated in ticks. Setting this to low values
-										--will cause AI to turn to T pose more often
 	end
 	
 
@@ -164,22 +183,56 @@ VEHICLE_FUEL    = {}
 object_table_ptr= nil
 
 function OnScriptLoad()
-	execute_command("vehicle_incremental_rate "..ai_position_update_rate)
+	execute_command("vehicle_incremental_rate "..ai_position_rate)
+	execute_command("projectile_incremental_rate "..projectile_rate)
 	object_table_ptr = sig_scan("8B0D????????8B513425FFFF00008D")
 	register_callback(cb['EVENT_GAME_START'],"OnGameStart")
-	if(lookup_tag("weap", dead_weapon) ~= 0 and flood_gametype == get_var(0, "$mode")) then
+	Initialize(0)
+	FindBipeds()
+	
+	execute_command("ai_place elite")
+	execute_command("ai_place elite")
+	execute_command("ai_place elite")
+	execute_command("ai_place elite")
+	execute_command("ai_place elite")
+	execute_command("ai_place elite")
+	execute_command("ai_place elite")
+	execute_command("ai_place elite")
+	execute_command("ai_place elite")
+	execute_command("ai_place elite")
+	execute_command("ai_place elite")
+	execute_command("ai_place elite")
+	execute_command("ai_place elite")
+end
+
+function OnGameStart()
+	game_count = game_count + 1
+	Initialize(1)
+	FindBipeds()
+end
+
+function Initialize(NewGame)
+	if(lookup_tag("bipd", ai_check_tag) ~= 0 and flood_gametype == get_var(0, "$mode")) then
+		InitializeVehicles()
 		register_callback(cb["EVENT_TICK"],"OnTick")
 		register_callback(cb['EVENT_JOIN'], "OnPlayerJoin")
 		register_callback(cb['EVENT_DIE'], "OnPlayerDeath")
 		register_callback(cb['EVENT_COMMAND'],"OnCommand")
 		register_callback(cb['EVENT_SPAWN'],"OnPlayerSpawn")
 		register_callback(cb['EVENT_OBJECT_SPAWN'],"OnObjectSpawn")
-		execute_command("ai_place flood_base")
+		execute_command("scorelimit 10000")
+		execute_command("object_create spade")
 		execute_command("set remove_barrier 1")
 		for i = 1,16 do
-			ResetPlayerStats(i)
+			ResetPlayerStats(i, 0)
 		end
-		execute_command("scorelimit 10000")
+		if NewGame == 1 then
+			wave = 1
+			--execute_command("ai_place flood_night")
+			--timer(wave_time * 1000, "NewWave", game_count)
+		else
+			execute_command("ai_place elite")
+		end
 	else
 		unregister_callback(cb["EVENT_TICK"])
 		unregister_callback(cb['EVENT_JOIN'])
@@ -190,34 +243,36 @@ function OnScriptLoad()
 	end
 end
 
-function OnGameStart()
-	game_count = game_count + 1
-	if(lookup_tag("weap", dead_weapon) ~= 0 and flood_gametype == get_var(0, "$mode")) then
-		register_callback(cb["EVENT_TICK"],"OnTick")
-		register_callback(cb['EVENT_JOIN'], "OnPlayerJoin")
-		register_callback(cb['EVENT_DIE'], "OnPlayerDeath")
-		register_callback(cb['EVENT_COMMAND'],"OnCommand")
-		register_callback(cb['EVENT_SPAWN'],"OnPlayerSpawn")
-		register_callback(cb['EVENT_OBJECT_SPAWN'],"OnObjectSpawn")
-		execute_command("scorelimit 10000")
-		execute_command("object_create spade")
-		execute_command("set remove_barrier 1")
-		
-		for i = 1,16 do
-			ResetPlayerStats(i)
+function FindBipeds()
+	local object_table = read_dword(read_dword(object_table_ptr + 2))
+	local object_count = read_word(object_table + 0x2E)
+	local object_table_base = read_dword(object_table + 0x34)
+	for i=0,object_count-1 do
+		local ID = read_word(object_table_base + i*12)*0x10000 + i
+		local object = get_object_memory(ID)
+		if object ~= 0 and read_word(object + 0xB4) == 0 then
+			local MetaID = read_dword(object)
+			CheckBiped(ID, MetaID)
 		end
-		wave = 1
-		
-		--say_all("Wave "..wave)
-		execute_command("ai_place flood_night")
-		timer(wave_time * 1000, "NewWave", game_count)
-	else
-		unregister_callback(cb["EVENT_TICK"])
-		unregister_callback(cb['EVENT_JOIN'])
-		unregister_callback(cb['EVENT_DIE'])
-		unregister_callback(cb['EVENT_COMMAND'])
-		unregister_callback(cb['EVENT_SPAWN'])
-		unregister_callback(cb['EVENT_OBJECT_SPAWN'])
+	end
+end
+
+function InitializeVehicles()
+	for biped, data in pairs (BIPEDS) do
+		local address = lookup_tag("bipd", ai_dir..biped..biped_dir)
+		if address ~= 0 then
+			data.id = read_dword(address + 0xC)
+		end
+		for key,vehicle in pairs (data) do
+			local vehicle_tag = lookup_tag("vehi", ai_dir..biped..veh_dir..vehicle)
+			if vehicle_tag ~= 0 then
+				local vehicle_data = read_dword(vehicle_tag + 0x14)
+				write_dword(vehicle_data + 0x70, 0x65666665)
+				write_dword(vehicle_data + 0x70 + 0x4, 0)
+				write_dword(vehicle_data + 0x70 + 0x8, 0)
+				write_dword(vehicle_data + 0x70 + 0xC, 0xFFFFFFFF)
+			end
+		end
 	end
 end
 
@@ -242,82 +297,75 @@ function NewWave(current_game)
 	return true
 end
 
-function OnScriptUnload()--	Remove all AI on unload (we don't need invisible AI)
+function OnScriptUnload()--	Remove all AI vehicles
 	for ID, info in pairs (AI) do
-		destroy_object(ID)
+		--destroy_object(ID)
 		if(AI[ID]["vehicle"] ~= nil) then
-			destroy_object(AI[ID]["vehicle"])
+			destroy_object(AI[ID].vehicle)
 		end
 	end
 end
 
 function OnPlayerJoin(PlayerIndex)
-	if(tonumber(get_var(PlayerIndex, "$deaths")) > player_lives - 1 and get_var(PlayerIndex, "$team") == "red") then
-		say(PlayerIndex, "You are out of lives and have been turned into a zombie!")
-		execute_command("st "..PlayerIndex.." blue")
-	else
-		execute_command("st "..PlayerIndex.." red")
-	end
-	
-	ResetPlayerStats(PlayerIndex)
+	write_byte(get_player(PlayerIndex) + 0x20, 0)
+	ResetPlayerStats(PlayerIndex, 0)
 	VehiID = spawn_object("vehi", "altis\\vehicles\\scriptroomthing\\scriptroomthing", -61.1943, -151.848, -110.493)
 	timer(1000, "destroy_object", VehiID)
 end
 
 function OnPlayerSpawn(PlayerIndex)
-	local lives_remaining
-	if(get_var(PlayerIndex, "$team") == "red") then
-		lives_remaining = player_lives - get_var(PlayerIndex, "$deaths")
-		if(lives_remaining > 0) then
-			say(PlayerIndex, "You have "..lives_remaining.." lives remaining")
-			if(get_var(PlayerIndex, "$team") == "blue") then
-				execute_command("st "..PlayerIndex.." red")
-			end
-		end
+	timer(33, "SwitchTeam", PlayerIndex)
+	local lives_remaining = player_lives - tonumber(get_var(PlayerIndex, "$deaths"))
+	if lives_remaining > 0 then
+		say(PlayerIndex, "You have "..lives_remaining.." lives remaining")
 	end
 end
 
 function OnPlayerDeath(PlayerIndex, KilledIndex)
 	PlayerIndex = tonumber(PlayerIndex)
 	KilledIndex = tonumber(KilledIndex)
+	local lives_remaining = player_lives - tonumber(get_var(PlayerIndex, "$deaths"))
 	
-	if(tonumber(get_var(PlayerIndex, "$deaths")) > player_lives - 1 and get_var(PlayerIndex, "$team") == "red") then
-		say_all(get_var(PlayerIndex, "$name").." has been infected!")
+	if lives_remaining < 1 then
+		if lives_remaining == 0 then
+			say_all(get_var(PlayerIndex, "$name").." has been infected!")
+		end
 		timer(33, "execute_command", "st "..PlayerIndex.." blue")
 	end
 	
 	PLAYERS[PlayerIndex]["item"] = nil
 	
-	--placeholder
-	if(1) then
-		return false
-	end
-	
-	--	Spawn a zombie where player died
-	if(PLAYERS[PlayerIndex]["x"] ~= nil) then
-		execute_command("ai_place flood_base")
-		PLAYERS[PlayerIndex]["died"] = 1
-	end
-	
-	--	Penalise the killer
+	--	Give score to the killer
 	if(KilledIndex == PlayerIndex) then
 		return false
 	end
-	PLAYERS[PlayerIndex]["score"] = 0
-	if(KilledIndex > 0) then
-		say(KilledIndex, "You lost $"..player_kill_penalty.." for killing another player.")
-		if(PLAYERS[KilledIndex]["score"] - player_kill_penalty > 0) then
-			PLAYERS[KilledIndex]["score"] = PLAYERS[KilledIndex]["score"] - player_kill_penalty
-		else
-			PLAYERS[KilledIndex]["score"] = 0
-		end
+	if(KilledIndex > 0 and KilledIndex ~= PlayerIndex) then
+		PLAYERS[KilledIndex].score = PLAYERS[KilledIndex].score + player_kill_normal
+		PLAYERS[KilledIndex].kills = PLAYERS[KilledIndex].kills + 1
 	end
 end
 
-function ResetPlayerStats(PlayerIndex)
+--TODO FIX THIS SHIT BECAUSE SAPP SUCKS
+function SwitchTeam(PlayerIndex)
+	PlayerIndex = tonumber(PlayerIndex)
+	local lives_remaining = player_lives - tonumber(get_var(PlayerIndex, "$deaths"))
+	if lives_remaining < 1 then
+		say(PlayerIndex, "You are out of lives and have been turned into a zombie!")
+		execute_command("st "..PlayerIndex.." blue")
+	else
+		execute_command("st "..PlayerIndex.." red")
+	end
+end
+
+function ResetPlayerStats(PlayerIndex, NewStats)
 	PLAYERS[PlayerIndex] = {}
-	PLAYERS[PlayerIndex]["kills"] = 0
-	PLAYERS[PlayerIndex]["score"] = 0
+	if NewStats == 1 then
+		PLAYERS[PlayerIndex]["kills"] = get_var(PlayerIndex, "$kills")
+		PLAYERS[PlayerIndex]["score"] = get_var(PlayerIndex, "$score")
+	else
+		PLAYERS[PlayerIndex]["kills"] = 0
+		PLAYERS[PlayerIndex]["score"] = 0
+	end
 	PLAYERS[PlayerIndex]["shop"] = nil
 	PLAYERS[PlayerIndex]["item"] = nil
 	PLAYERS[PlayerIndex]["flashlight"] = 0
@@ -331,6 +379,7 @@ function OnTick()
 		local weapon_count = 0
 		local scenery_count = 0
 		local equipment_count = 0
+		local projectile_count = 0
 		local total_objects = 0
 		local object_table = read_dword(read_dword(object_table_ptr + 2))
 		local object_count = read_word(object_table + 0x2E)
@@ -348,6 +397,8 @@ function OnTick()
 					weapon_count = weapon_count + 1
 				elseif(object_type == 6) then
 					scenery_count = scenery_count + 1
+				elseif(object_type == 5) then
+					projectile_count = scenery_count + 1
 				elseif(object_type == 3) then
 					equipment_count = equipment_count + 1
 				end
@@ -359,6 +410,7 @@ function OnTick()
 		rprint(debug_person, "|rBipeds "..biped_count)
 		rprint(debug_person, "|rVehicles "..vehicle_count)
 		rprint(debug_person, "|rWeapons "..weapon_count)
+		rprint(debug_person, "|rProjectiles "..projectile_count)
 		--rprint(debug_person, "|rEquipment "..equipment_count)
 		--rprint(debug_person, "|rSynced objects "..biped_count + vehicle_count + weapon_count + equipment_count)
 		--rprint(debug_person, "|rScenery "..scenery_count)
@@ -375,18 +427,18 @@ function OnTick()
 	--	Set player scores and get info
 	for i = 1,16 do
 		if(player_alive(i)) then
-			execute_command("kills "..i.." "..PLAYERS[i]["kills"])
-			execute_command("score  "..i.." "..PLAYERS[i]["score"])
+			execute_command("kills "..i.." "..PLAYERS[i].kills)
+			execute_command("score  "..i.." "..PLAYERS[i].score)
 			local player_object = get_dynamic_player(i)
 			
-			if(get_var(i, "$team") == "red" and read_bit(player_object + 0x208,4) == 1 and PLAYERS[i]["flashlight"] == 0) then
-				PLAYERS[i]["flashlight"] = 15
+			if(get_var(i, "$team") == "red" and read_bit(player_object + 0x208,4) == 1 and PLAYERS[i].flashlight == 0) then
+				PLAYERS[i].flashlight = 15
 			end
-			if(PLAYERS[i]["flashlight"] > 0) then
-				PLAYERS[i]["flashlight"] = PLAYERS[i]["flashlight"] - 1
+			if(PLAYERS[i].flashlight > 0) then
+				PLAYERS[i].flashlight = PLAYERS[i].flashlight - 1
 			end
 			
-			PLAYERS[i]["x"], PLAYERS[i]["y"], PLAYERS[i]["z"] = read_vector3d(player_object + 0x5C)
+			PLAYERS[i].x, PLAYERS[i].y, PLAYERS[i].z = read_vector3d(player_object + 0x5C)
 		end
 	end
 	
@@ -398,81 +450,86 @@ function OnTick()
 	
 	--	Go through all of the bipeds that are in the AI table
 	for ID, info in pairs (AI) do
-	
 		local biped_object = get_object_memory(ID)
-
-		if(AI[ID] ~= nil and biped_object ~= 0) then	--			Read biped info
-			if(read_float(biped_object + 0xE0) < 0.01) then --			If biped is dead
+		if AI[ID] ~= nil and biped_object ~= 0 then
+			if read_float(biped_object + 0xE0) < 0.01 then --	If biped is dead
 				RemoveBiped(ID, biped_object)
 			else 
 				ai_id_count = ai_id_count + 1
-				--		Increase time alive
-				AI[ID]["time_alive"] = AI[ID]["time_alive"] + 1
-				--			Remove the biped if he's been alive too long and is far from players
-				if(AI[ID]["time_alive"] > ai_life_time) then
-					local able_to_remove = true
-					for i = 1,16 do
-						if(player_alive(i)) then
-							local player_object = get_dynamic_player(i)
-							if(player_object ~= 0) then
-								local x, y, z = read_vector3d(player_object + 0x5C)
-								if(DistanceFormula(x,y,z,AI[ID]["x"], AI[ID]["y"], AI[ID]["z"]) < ai_deletion_distance) then
-									able_to_remove = false
-								end
-							end
-						end
-					end
-					if(able_to_remove) then
-						RemoveBiped(ID, biped_object)
-					end
+				AI[ID].x, AI[ID].y, AI[ID].z = read_vector3d(biped_object + 0x5C)
+				AI[ID].x_vel, AI[ID].y_vel, AI[ID].z_vel = read_vector3d(biped_object + 0x68)
+				AI[ID].yaw = read_float(biped_object + 0x224)
+				AI[ID].pitch = read_float(biped_object + 0x228)
+				GetDamagerID(ID, biped_object)
+				local unit_state = read_byte(biped_object + 0x2A3)
+				--rprint(1, unit_state)
+				local anim = BIPEDS[AI[ID].type][unit_state]
+				--			If animation for this state does not exist then set it to idle
+				if(anim == nil) then
+					say_all(AI[ID].type.." had no vehicle for state "..unit_state)
+					anim = BIPEDS[AI[ID].type][0]
 				end
 				
-				--			If biped is alive then get its info
-				if(AI[ID] ~= nil) then
-					AI[ID]["x"], AI[ID]["y"], AI[ID]["z"] = read_vector3d(biped_object + 0x5C)
-					AI[ID]["yaw"] = read_float(biped_object + 0x224)
-					AI[ID]["pitch"] = read_float(biped_object + 0x228)
-					
-					GetDamagerID(ID, biped_object)
-					
-					local unit_state = read_byte(biped_object + 0x2A3)
-					local unit_animation = BIPED_ANIMATION_STATE[unit_state]
-					--			If animation for this state does not exist then set it to idle
-					--			I don't know why I forgot to do this before
-					if(unit_animation == nil) then
-						unit_animation = BIPED_ANIMATION_STATE[0]
-						say_all("Biped had no vehicle for this animation. This would have caused issues before D:")
-					end
-					
-					--			Check if the biped has a vehicle assigned to it
-					if(AI[ID]["vehicle"] == nil) then
-						SpawnVehicle(ID, unit_animation)
-					else
-						--		Sync vehicle animations with biped's
-						local vehicle_object = get_object_memory(AI[ID]["vehicle"])
-						if(vehicle_object ~= 0) then
-							local vehicle_name = read_string(read_dword(read_word(vehicle_object) * 32 + 0x40440038))
-							if(unit_animation ~= nil and vehicle_name ~= tag_directory..unit_animation and second_count%ai_animation_update_rate == 0) then
-								destroy_object(AI[ID]["vehicle"])
-								SpawnVehicle(ID, unit_animation)
+				local min_distance = 1000
+				for i = 1,16 do
+					if player_alive(i) then
+						local player_object = get_dynamic_player(i)
+						if player_object ~= 0 then
+							local x, y, z = read_vector3d(player_object + 0x5C)
+							local vehicle = read_dword(player_object + 0x11C)
+							if vehicle ~= 0xFFFFFFFF then
+								x, y, z = read_vector3d(get_object_memory(vehicle) + 0x5C)
 							end
-							
-							--	Sync vehicle coordinates with biped's
-							--write_bit(vehicle_object +  0x8, 8, 1) ???
-							write_vector3d(vehicle_object + 0x5C, AI[ID]["x"], AI[ID]["y"], AI[ID]["z"])
-							write_vector3d(vehicle_object + 0x74, AI[ID]["yaw"], AI[ID]["pitch"], 0)
-							
-							--Set biped health depending on player count
-							if(AI[ID]["time_alive"] == 100) then
-								local player_count = get_var(0, "$pn")
-								write_float(biped_object + 0xE0, 1.0 + player_count)
-								rprint(1, player_count..", health = ".. 1.0+player_count)
+							local distance = DistanceFormula(x,y,z,AI[ID].x, AI[ID].y, AI[ID].z)
+							if distance < min_distance then
+								min_distance = distance
 							end
-						else
-							--	For some reason some of the vehicles get this, dunno how to fix yet
-							SpawnVehicle(ID, unit_animation)
-							--RemoveBiped(ID, biped_object)
 						end
+					end
+				end
+				AI[ID].time_alive = AI[ID].time_alive + 1
+				--			Remove the biped if he's been alive too long and is far from players
+				if min_distance > ai_deletion_distance then
+					if AI[ID].time_alive > ai_life_time then
+						RemoveBiped(ID, biped_object)
+					elseif AI[ID].vehicle ~= nil then
+						destroy_object(AI[ID].vehicle)
+					end
+				else
+					--			Check if the biped has a vehicle assigned to it
+					if(AI[ID].vehicle == nil) then
+						SpawnVehicle(ID, anim)
+					end
+					--		Sync vehicle animations with biped's
+					local vehicle_object = get_object_memory(AI[ID].vehicle)
+					if vehicle_object ~= 0 then
+						local name = GetName(vehicle_object)
+						if(anim ~= nil and name ~= ai_dir..AI[ID].type..veh_dir..anim and (ignore_rate or second_count%ai_animation_rate == 0)) then
+							destroy_object(AI[ID].vehicle)
+							SpawnVehicle(ID, anim)
+							vehicle_object = get_object_memory(AI[ID].vehicle)
+						end
+						
+						--	Sync vehicle coordinates with biped's
+						if AI[ID].x_vel ~= 0 or AI[ID].y_vel ~= 0 then
+							write_bit(vehicle_object + 0x10, 5, 0)		--	make vehicle not stationary
+							write_vector3d(vehicle_object + 0x68, AI[ID].x_vel, AI[ID].y_vel, AI[ID].z_vel)	--	sync velocities
+						end
+						write_vector3d(vehicle_object + 0x74, AI[ID].yaw, AI[ID].pitch, 0)	--	sync rotation
+						if NO_VELOCITY_STATES[unit_state] ~= nil then	--	sync locations for states where biped usually doesn't move
+							write_vector3d(vehicle_object + 0x5C, AI[ID].x, AI[ID].y, AI[ID].z)
+						end
+						
+						--Set biped health depending on player count
+						if(AI[ID].time_alive == 100) then
+							local player_count = get_var(0, "$pn")
+							write_float(biped_object + 0xE0, 1.0 + player_count*0.1)
+							--rprint(1, player_count..", health = ".. 1.0+player_count*0.1)
+						end
+					else
+						--	For some reason some of the vehicles get this, dunno how to fix yet
+						--	Actually, this doesn't happen often so I'll just leave it like this
+						SpawnVehicle(ID, anim)
 					end
 				end
 			end
@@ -716,8 +773,8 @@ end
 
 function ResetItem(PlayerIndex, ItemID)
 	PlayerIndex = tonumber(PlayerIndex)
-	if(PLAYERS[PlayerIndex]["item"] ~= nil and tonumber(ItemID) == PLAYERS[PlayerIndex]["item"]) then
-		PLAYERS[PlayerIndex]["item"] = nil
+	if(PLAYERS[PlayerIndex].item ~= nil and tonumber(ItemID) == PLAYERS[PlayerIndex].item) then
+		PLAYERS[PlayerIndex].item = nil
 		SHOP_ITEM_QUEUE[PlayerIndex] = nil
 		for j = (PlayerIndex + 1),16 do
 			if(SHOP_ITEM_QUEUE[j] ~= nil) then
@@ -733,45 +790,64 @@ function GetDamagerID(ID, biped_object)-- From 002; Checks which player killed t
 		local struct = biped_object + 0x430 + 0x10 * k
 		local damager_pid = read_word(struct + 0xC)
 		if(damager_pid ~= 0xFFFF) then
-			AI[ID]["damage_causer"] = tonumber(to_player_index(damager_pid))
+			AI[ID].damage_causer = tonumber(to_player_index(damager_pid))
 		end
 	end
 end
 
 function RemoveBiped(ID, biped_object)--	Remove dead/non-existent biped and spawn dead weapon
-	destroy_object(ID)
-	if(AI[ID]["vehicle"] ~= nil) then
-		destroy_object(AI[ID]["vehicle"])
+	if(AI[ID].vehicle ~= nil) then
+		destroy_object(AI[ID].vehicle)
 	end
 	if(biped_object ~= 0) then
 		GetDamagerID(ID, biped_object)
 	end
-	if(AI[ID]["x"] ~= nil and AI[ID]["y"] ~= nil and AI[ID]["pitch"] ~= nil) then
-		--	Spawn a weapon that fakes biped death (could use a vehicle as well)
-		local dead_zombie = spawn_object("weap", dead_weapon,  AI[ID]["x"], AI[ID]["y"], AI[ID]["z"], GetYaw(ID))
+	if(AI[ID].x ~= nil and AI[ID].y ~= nil and AI[ID].pitch ~= nil) then
+		--	Spawn a weapon that fakes biped death (could use a vehicle as well I guess)
+		local dead_zombie = spawn_object("weap", ai_dir..AI[ID].type..dead_tag,  AI[ID].x, AI[ID].y, AI[ID].z, GetYaw(ID))
 		--	Set player stats
-		if(AI[ID]["damage_causer"] ~= nil) then
-			if(player_alive(AI[ID]["damage_causer"])) then
-				local PlayerIndex = AI[ID]["damage_causer"]
-				if(PLAYERS[PlayerIndex]~= nil and PLAYERS[PlayerIndex]["kills"] ~= nil) then
-					PLAYERS[PlayerIndex]["kills"] = PLAYERS[PlayerIndex]["kills"] + 1
-					PLAYERS[PlayerIndex]["score"] = PLAYERS[PlayerIndex]["score"] + zombie_kill_normal
+		if(AI[ID].damage_causer ~= nil) then
+			if(player_alive(AI[ID].damage_causer)) then
+				local PlayerIndex = AI[ID].damage_causer
+				if(PLAYERS[PlayerIndex]~= nil and PLAYERS[PlayerIndex].kills ~= nil) then
+					PLAYERS[PlayerIndex].kills = PLAYERS[PlayerIndex].kills + 1
+					PLAYERS[PlayerIndex].score = PLAYERS[PlayerIndex].score + BIPEDS[AI[ID].type].score
 				end
 			end
 		end
 	end
+	destroy_object(ID)
 	AI[ID] = nil
 end
 
-function SpawnVehicle(ID, unit_animation)
-	AI[ID]["vehicle"] = spawn_object("vehi", tag_directory..unit_animation, AI[ID]["x"], AI[ID]["y"], AI[ID]["z"], GetYaw(ID))
+function SpawnVehicle(ID, anim)
+	AI[ID].vehicle = spawn_object("vehi", ai_dir..AI[ID].type..veh_dir..anim, AI[ID].x, AI[ID].y, AI[ID].z, GetYaw(ID))
 end
 
 function OnObjectSpawn(PlayerIndex, MetaID, ParentID, ID)
-	timer(33, "ObjectCheck", ID)
+	timer(0, "ObjectCheck", ID, MetaID)
 end
 
-function ObjectCheck(ID)
+function CheckBiped(ID, MetaID)
+	for biped, data in pairs (BIPEDS) do
+		if data.id == tonumber(MetaID) then
+			if AI[ID] == nil then
+				if(ai_id_count > ai_max) then
+					destroy_object(ID)
+					return false
+				else
+					AI[ID] = {}
+					AI[ID].time_alive = 0
+					AI[ID].type = biped
+					--say_all("biped spawned! "..biped)
+				end
+			end
+			return false
+		end
+	end
+end
+
+function ObjectCheck(ID, MetaID)
 	if(ID == nil) then 
 		return true 
 	end
@@ -779,110 +855,67 @@ function ObjectCheck(ID)
 	local object = get_object_memory(ID)
 	
 	if(object ~= 0) then
-		local name = read_string(read_dword(read_word(object) * 32 + 0x40440038))
-		--	Check if the object is our biped
-		if(name == biped) then
-			if(ai_id_count > ai_max) then
-				destroy_object(ID)
-				return false
-			else
-				AI[ID] = {}
-				AI[ID]["time_alive"] = 0
-				--	Check if a player just died then teleport a zombie to its location
-				if(player_death_zombie_spawn) then
-					for key,value in pairs (PLAYERS) do
-						if(PLAYERS[key]["died"] ~= nil) then
-							write_vector3d(object + 0x5C, PLAYERS[key]["x"], PLAYERS[key]["y"], PLAYERS[key]["z"])
-							PLAYERS[key]["died"] = nil
-							break
-						end
-					end
-				end
-			end
-		elseif(read_word(object + 0xB4) == 2) then-- weap
-			--	Replace placeholder weapon with a weapon that a player actually bought
-			if(name == shop_item_location) then
-				if(SHOP_ITEM_QUEUE[1] ~= nil) then
-				--for i = 1,16 do -- why did I not remove this??
-					i = SHOP_ITEM_QUEUE[1]
-					if(player_present(i)) then
-						if(PLAYERS[i]["item"] ~= nil) then
-							local item = SHOP[PLAYERS[i]["item"]]
-							local x,y,z = read_vector3d(object + 0x5C)
-							for j = 4,16 do
-								if(item[j] ~= nil) then
-									spawn_object(item[3], item[j], x+0.11, y+0.1, z+0.05, 0)
-								end
-							end
-							destroy_object(object)
-							PLAYERS[i]["item"] = nil
-							SHOP_ITEM_QUEUE[1] = nil
-							--	Move all other items on the queue
-							for j = 2,16 do
-								if(SHOP_ITEM_QUEUE[j] ~= nil) then
-									SHOP_ITEM_QUEUE[j-1] = SHOP_ITEM_QUEUE[j]
-									SHOP_ITEM_QUEUE[j] = nil
-								end
-							end
-							return false
-						end
-					end
-				end
-			end
+		if(read_word(object + 0xB4) == 0) then
+			CheckBiped(ID, MetaID)
 		else
-			--	Check if the object is one of our vehicles
-			if(read_word(object + 0xB4) == 1) then
-				if(VEHICLES[name] == 0) then
-					destroy_object(ID)
-				else
-					if(VEHICLES[name] == 1) then
-						VEHICLE_FUEL[ID] = rand(0, 10000)
-					else
-						--	Replace truck with mp variant
-						if(VEHICLES[name] == 2) then
-							local x,y,z = read_vector3d(object + 0x5C)
-							local a = read_float(object + 0x76)
-							local b = read_float(object + 0x7A)
-							local c = read_float(object + 0x7E)
-							local d = read_float(object + 0x82)
-							destroy_object(ID)
-							respawnedVehicleID = spawn_object("vehi", "halo reach\\objects\\vehicles\\human\\civilian\\military_truck\\military truck mp", x, y, z, 0)
-							respawnedVehicle = get_object_memory(respawnedVehicleID)
-							if(respawnedVehicle ~= nil) then
-								write_float(respawnedVehicle + 0x76, a)
-								write_float(respawnedVehicle + 0x7A, b)
-								write_float(respawnedVehicle + 0x7E, c)
-								write_float(respawnedVehicle + 0x82, d)
+			local name = GetName(object)
+			if(read_word(object + 0xB4) == 2) then-- weap
+				--	Replace placeholder weapon with a weapon that a player actually bought
+				if(name == shop_item_location) then
+					if(SHOP_ITEM_QUEUE[1] ~= nil) then
+					--for i = 1,16 do -- why did I not remove this??
+						i = SHOP_ITEM_QUEUE[1]
+						if(player_present(i)) then
+							if(PLAYERS[i]["item"] ~= nil) then
+								local item = SHOP[PLAYERS[i]["item"]]
+								local x,y,z = read_vector3d(object + 0x5C)
+								for j = 4,16 do
+									if(item[j] ~= nil) then
+										spawn_object(item[3], item[j], x+0.11, y+0.1, z+0.05, 0)
+									end
+								end
+								destroy_object(object)
+								PLAYERS[i]["item"] = nil
+								SHOP_ITEM_QUEUE[1] = nil
+								--	Move all other items on the queue
+								for j = 2,16 do
+									if(SHOP_ITEM_QUEUE[j] ~= nil) then
+										SHOP_ITEM_QUEUE[j-1] = SHOP_ITEM_QUEUE[j]
+										SHOP_ITEM_QUEUE[j] = nil
+									end
+								end
+								return false
 							end
-						--else
-						--	for key,value in pairs (BIPED_ANIMATION_STATE) do
-						--		if(name == tag_directory..value) then
-						--			timer(1000*ai_purge_rate, "destroy_object", ID)
-						--			break
-						--		end
-						--	end
 						end
 					end
 				end
-			end
-		end
-	end
-end
-
-function PurgeAIVehicles()--	Removes all of AI vehicles in order to get rid of duplicates (does not work)
-	local object_table = read_dword(read_dword(object_table_ptr + 2))
-    local object_count = read_word(object_table + 0x2E)
-    local first_object = read_dword(object_table + 0x34)
-    for i=0,object_count-1 do
-        local object = read_dword(first_object + i * 0xC + 0x8)
-        if(object ~= 0 and object ~= 0xFFFFFFFF) then
-			local object_type = read_word(object + 0xB4)
-            if(object_type == 1) then
-				local name = GetName(object)
-				for key,value in pairs (BIPED_ANIMATION_STATE) do
-					if(name == tag_directory..value) then
-						--remove vehicle somehow????
-						break
+			else
+				--	Check if the object is one of our vehicles
+				if(read_word(object + 0xB4) == 1) then
+					if(VEHICLES[name] == 0) then
+						destroy_object(ID)
+					else
+						if(VEHICLES[name] == 1) then
+							VEHICLE_FUEL[ID] = rand(0, 10000)
+						else
+							--	Replace truck with mp variant
+							if(VEHICLES[name] == 2) then
+								local x,y,z = read_vector3d(object + 0x5C)
+								local a = read_float(object + 0x76)
+								local b = read_float(object + 0x7A)
+								local c = read_float(object + 0x7E)
+								local d = read_float(object + 0x82)
+								destroy_object(ID)
+								respawnedVehicleID = spawn_object("vehi", "halo reach\\objects\\vehicles\\human\\civilian\\military_truck\\military truck mp", x, y, z, 0)
+								respawnedVehicle = get_object_memory(respawnedVehicleID)
+								if(respawnedVehicle ~= nil) then
+									write_float(respawnedVehicle + 0x76, a)
+									write_float(respawnedVehicle + 0x7A, b)
+									write_float(respawnedVehicle + 0x7E, c)
+									write_float(respawnedVehicle + 0x82, d)
+								end
+							end
+						end
 					end
 				end
 			end
@@ -1031,7 +1064,12 @@ function OnCommand(PlayerIndex,Command)
 	
 	for i = 1,3 do	--	shop
 		if(commandargs[1] == shop_command[i]) then
-		PLAYERS[PlayerIndex]["shop"] = 1
+		local player = get_player(PlayerIndex)
+		if read_byte(player + 0x20) == 0 then
+			PLAYERS[PlayerIndex]["shop"] = 1
+		else
+			say(PlayerIndex, "Zombies cannot buy stuff hurr durr")
+		end
 		return false
 		end
 	end
@@ -1074,5 +1112,9 @@ function GetYaw(ID)-- Made by 002
     
     if(a < 0) then finalAngle = finalAngle * -1 end
  
-    return finalAngle
+    finalAngle = finalAngle - math.pi / 2
+ 
+    if(finalAngle < 0) then finalAngle = finalAngle + math.pi * 2 end
+ 
+    return  (math.pi*2) - finalAngle
 end

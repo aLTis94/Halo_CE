@@ -40,7 +40,7 @@
 	boost_speed = 1.7
 	
 	--	How much score players get
-	red_score = 2
+	red_score = 3
 	blue_score = 1
 	
 --	GEOLOCATION
@@ -64,6 +64,9 @@
 	
 	spanish_messages = {"Ganaron los evasores!", "Ganaron los buscadores!", " fue atrapado por ", "Esperando mas jugadores...", " es el buscador!", "Se a liberado a los buscadores!", " Murio y cambio de equipo!", "Estas son las escondidas", "Atrapa otros jugadores para ganar!"}
 	
+	color_blue = "|nc5353ff"
+	color_red = "|ncff5353"
+	
 --	END OF CONFIG
 
 
@@ -79,6 +82,7 @@ player_country = {}
 boost = {}
 camo = {}
 game_started = false
+game_was_started = false
 round_started = false
 game_over = false
 delay = 10
@@ -153,10 +157,13 @@ function CheckGameMode()
 		rounds = 0
 		game_started = false
 		game_over = false
+		game_was_started = true
 		player_locations = {}
 	
 		execute_command("disable_all_objects 0 1")
+		execute_command("disable_all_objects 1 1")
 		execute_command("disable_all_vehicles 0 1")
+		execute_command("disable_all_vehicles 1 1")
 		execute_command("disable_sj 1")
 		execute_command("block_tc 1")
 		
@@ -175,10 +182,18 @@ function CheckGameMode()
 		write_dword(disable_killmsg_addr, 0x03EB01B1)
 		safe_write(false)
 	else
-		execute_command("disable_all_objects 0 0")
-		execute_command("disable_all_vehicles 0 0")
-		execute_command("disable_sj 0")
-		execute_command("block_tc 0")
+		
+		if game_was_started then
+			timer(3500, "BalanceTeams")
+			execute_command("disable_all_objects 0 0")
+			execute_command("disable_all_objects 1 0")
+			execute_command("disable_all_vehicles 0 0")
+			execute_command("disable_all_vehicles 1 0")
+			execute_command("disable_sj 0")
+			execute_command("block_tc 0")
+		end
+		
+		game_was_started = false
 		
 		unregister_callback(cb['EVENT_OBJECT_SPAWN'])
 		unregister_callback(cb["EVENT_TICK"])
@@ -190,6 +205,42 @@ function CheckGameMode()
 		safe_write(true)
 		write_dword(disable_killmsg_addr, original_code_1)
 		safe_write(false)
+	end
+end
+
+function BalanceTeams()
+	if get_var(0, "$ffa") == 1 then return end
+	
+	local RED_PLAYERS = {}
+	local BLUE_PLAYERS = {}
+	for i=1,16 do
+		if player_present(i) then
+			local team = get_var(i, "$team")
+			if team == "red" then
+				RED_PLAYERS[i] = true
+			else
+				BLUE_PLAYERS[i] = true
+			end
+		end
+	end
+	
+	local difference = #RED_PLAYERS - #BLUE_PLAYERS
+	if difference > 1 then -- more reds
+		for i,j in pairs (RED_PLAYERS) do
+			difference = difference-1
+			if difference > 0 then
+				execute_command("st "..i.." blue")
+			end
+		end
+		say_all("Teams were balanced!")
+	elseif difference < -1 then -- more blues
+		for i,j in pairs (BLUE_PLAYERS) do
+			difference = difference+1
+			if difference < 0 then
+				execute_command("st "..i.." red")
+			end
+		end
+		say_all("Teams were balanced!")
 	end
 end
 
@@ -213,6 +264,10 @@ function StartRound()
 		end
 		return true
 	end
+	
+	--if rounds ~= 0 and rounds < round_count then
+	--	PlayAnnouncerSound(1)
+	--end
 	
 	round_started = true
 	rounds = rounds + 1
@@ -259,6 +314,8 @@ function StartGame()
 		round_started = false
 		return false
 	end
+	
+	PlayAnnouncerSound(31)
 	
 	say_all_languages(nil, 6)
 	round_started = false
@@ -379,6 +436,7 @@ function HaloIsDumb(PlayerIndex)
 		say_all_languages(get_var(PlayerIndex, "$name"), 7)
 		last_caught = PlayerIndex
 		ChooseTeam(PlayerIndex, 1)
+		PlayAnnouncerSound(30)
 	end
 end
 
@@ -428,6 +486,11 @@ function OnTick()
 	
 	--	Move seekers out of the map and print console messages
 	if(game_started == false) then
+	
+		if release_timer ~= nil and release_timer > 1 and release_timer < 11 and current_round_time%30 == 5 then
+			PlayAnnouncerSound(29)
+		end
+	
 		if(tonumber(get_var(0, "$reds")) == 0) then
 			while (1) do
 				local random_player = rand(1,16)
@@ -467,24 +530,24 @@ function OnTick()
 					
 					if(release_timer > 0 and console_messages and message_time == 0) then
 						if(player_country[i] == 1) then
-							rprint(i, "|rSeras liberado en "..release_timer)	
-							rprint(i, "|rTu eres un buscador")
-							rprint(i, "|rQuedan "..get_var(0, "$reds").." evasores")
+							rprint(i, "|rSeras liberado en "..release_timer..color_blue)	
+							rprint(i, "|rTu eres un buscador"..color_blue)
+							rprint(i, "|rQuedan "..get_var(0, "$reds").." evasores"..color_blue)
 						else
-							rprint(i, "|rYou will be released in "..release_timer)	
-							rprint(i, "|rYou are a seeker|nc5353ff")
-							rprint(i, "|r"..get_var(0, "$reds").." hiders left")
+							rprint(i, "|rYou will be released in "..release_timer..color_blue)	
+							rprint(i, "|rYou are a seeker"..color_blue)
+							rprint(i, "|r"..get_var(0, "$reds").." hiders left"..color_blue)
 						end
 					end
 				elseif(release_timer > 0 and console_messages and message_time == 0) then
 					if(player_country[i] == 1) then
-						rprint(i, "|rSe liberara a los buscadores en "..release_timer)	
-						rprint(i, "|rTu eres un evasor")
-						rprint(i, "|rQuedan "..get_var(0, "$reds").." evasores")
+						rprint(i, "|rSe liberara a los buscadores en "..release_timer..color_red)	
+						rprint(i, "|rTu eres un evasor"..color_red)
+						rprint(i, "|rQuedan "..get_var(0, "$reds").." evasores"..color_red)
 					else
-						rprint(i, "|rSeekers will be released in "..release_timer)	
-						rprint(i, "|rYou are a hider|ncff5353")
-						rprint(i, "|r"..get_var(0, "$reds").." hiders left")
+						rprint(i, "|rSeekers will be released in "..release_timer..color_red)	
+						rprint(i, "|rYou are a hider"..color_red)
+						rprint(i, "|r"..get_var(0, "$reds").." hiders left"..color_red)
 					end
 				end
 			elseif(player_present(i)) then
@@ -494,6 +557,13 @@ function OnTick()
 		end
 		return false
 	else--	game started
+	
+		if current_round_time/30 == 60 then
+			PlayAnnouncerSound(2)
+		elseif current_round_time/30 == 30 then
+			PlayAnnouncerSound(3)
+		end
+	
 		for i = 1,16 do
 			--	Boosts and stuff
 			if(boost[i] == nil or camo[i] == nil) then
@@ -515,29 +585,33 @@ function OnTick()
 					timer(1000*camo_time, "say", i, "Camo deactivated")
 					execute_command("camo "..i.." ".. camo_time)
 				end
-			
+				
+				local time_left = math.floor(current_round_time/30)
+				
 				if(console_messages and message_time == 0) then
 					ClearConsole(i)
 					if(player_country[i] == 1) then
 						if(get_var(i, "$team") == "red") then
-							rprint(i, "(E) Boost: "..boost[i].."|rTiempo restante "..math.floor(current_round_time/30))
-							rprint(i, "(F) Camo: "..camo[i].."|rTu eres un evasor")
+							rprint(i, "(E) Boost: "..boost[i].."|rTiempo restante "..time_left..color_red)
+							rprint(i, "(F) Camo: "..camo[i].."|rTu eres un evasor"..color_red)
+							rprint(i, "|rQuedan "..get_var(0, "$reds").." evasores"..color_red)
 						else
-							rprint(i, "|rTiempo restante "..math.floor(current_round_time/30))
-							rprint(i, "|rTu eres un buscador")
+							rprint(i, "|rTiempo restante "..time_left..color_blue)
+							rprint(i, "|rTu eres un buscador"..color_blue)
+							rprint(i, "|rQuedan "..get_var(0, "$reds").." evasores"..color_blue)
 						end
-						rprint(i, "|rQuedan "..get_var(0, "$reds").." evasores")
 					else
 						local player_speed = read_float((get_player(i)) + 0x6C)
 						--rprint(i, "Your speed is "..tonumber(player_speed))
 						if(get_var(i, "$team") == "red") then
-							rprint(i, "(E) Boost: "..boost[i].."|rTime left "..math.floor(current_round_time/30))
-							rprint(i, "(F) Camo: "..camo[i].."|rYou are a hider|ncff5353")
+							rprint(i, "(E) Boost: "..boost[i].."|rTime left "..time_left..color_red)
+							rprint(i, "(F) Camo: "..camo[i].."|rYou are a hider"..color_red)
+							rprint(i, "|r"..get_var(0, "$reds").." hiders left"..color_red)
 						else
-							rprint(i, "|rTime left "..math.floor(current_round_time/30))
-							rprint(i, "|rYou are a seeker|nc5353ff")
+							rprint(i, "|rTime left "..time_left..color_blue)
+							rprint(i, "|rYou are a seeker"..color_blue)
+							rprint(i, "|r"..get_var(0, "$reds").." hiders left"..color_blue)
 						end
-						rprint(i, "|r"..get_var(0, "$reds").." hiders left")
 					end
 				end
 			end
@@ -546,6 +620,7 @@ function OnTick()
 	
 	--	Check if hiders won by reaching the time limit
 	if(current_round_time == 0) then
+		PlayAnnouncerSound(13)
 		say_all_languages(nil, 1)
 		execute_command("team_score red +1")
 		for i = 1,16 do
@@ -561,6 +636,7 @@ function OnTick()
 	
 	--	Check if seekers won by catching all hiders
 	if(tonumber(get_var(0, "$reds")) == 0) then
+		PlayAnnouncerSound(10)
 		say_all_languages(nil, 2)
 		execute_command("team_score blue +1")
 		game_started = false
@@ -590,6 +666,7 @@ function OnTick()
 						other_player_object = get_dynamic_player(j)
 						local x2,y2,z2 = read_vector3d(other_player_object + 0x5C)
 						if(DistanceFormula(x1,y1,z1,x2,y2,z2) < catch_distance) then
+							PlayAnnouncerSound(30)
 							player_locations[j] = {}
 							player_locations[j].x = x2
 							player_locations[j].y = y2
@@ -639,6 +716,14 @@ function ClearConsole(i)--	Clears player's console from any messages
 	for j=1,30 do
 		rprint(i," ")
 	end
+end
+
+function PlayAnnouncerSound(sound_id)
+	local server_announcer_address = 0x5BDE00
+	write_dword(server_announcer_address + 0x8, 1) -- time until first sound in the queue stops playing
+	write_dword(server_announcer_address + 0x14, sound_id) -- second sound ID in the queue (from globals multiplayer information > sounds)
+	write_dword(server_announcer_address + 0x1C, 1) -- second sound in the queue will play
+	write_dword(server_announcer_address + 0x50, 2) -- announcer sound queue
 end
 
 function string:split(sep)--	From giraffe

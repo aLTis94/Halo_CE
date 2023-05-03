@@ -1,0 +1,28 @@
+
+api_version = "1.9.0.0"
+
+function OnScriptLoad()
+	register_callback(cb['EVENT_COMMAND'],"OnCommand")
+	register_callback(cb['EVENT_DIE'], "OnPlayerDeath")
+end
+
+function OnScriptUnload()
+end
+
+function OnCommand(i,Command,Environment,Password)
+	if Command == "bush" then
+		if player_alive(i) then
+			local x, y, z = read_vector3d(get_dynamic_player(i) + 0x5C)
+			execute_command("lua_call fake_forge SpawnForgeObject 6 altis\\scenery\\bush\\bush "..x.." "..y.." "..z.." 0 0 0 0 0")
+		end
+		return false
+	end
+	return true
+end
+
+function OnPlayerDeath(i)
+	local player = get_dynamic_player(i)
+	if player ~= nil then
+		rprint(1, "aaa")
+	end
+end

@@ -17,14 +17,17 @@ DISTANCE_FROM_COLLISION = 0.01
 
 --	END OF CONFIG
 
-api_version = "1.9.0.0"
+api_version = "1.12.0.0"
 
 function OnScriptLoad()
 	register_callback(cb["EVENT_TICK"],"OnTick")
 end
 
-function DeleteWeapon(ObjectID)
-	destroy_object(ObjectID)
+function DeleteWeapon(ID)
+	ID = tonumber(ID)
+	if get_object_memory(ID) ~= 0 then
+		destroy_object(ID)
+	end
 end
 
 function OnTick()

@@ -43,6 +43,9 @@ function OnScriptLoad(process, Game, persistent)
 	tick_length = read_float(0x612194)
 	shadow_darkness = read_float(0x6122F0) -- this changes shadow darkness but probably other things too
 	navpoint_z_offset = read_float(0x6122F4)
+	navpoint_conversion_to_meters = read_float(0x6128E0)
+	navpoint_x_offset = read_float(0x6128EC)
+	navpoint_y_offset = read_float(0x6128F0)
 	near_clip_plane = read_float(0x61226C)
 	node_rotation_multiplier = read_float(0x6122AC) -- affects all nodes in a weird way
 	screen_height = read_word(0x637CF0)
@@ -56,6 +59,7 @@ function OnScriptLoad(process, Game, persistent)
 	
 	gravity_global = read_float(0x637BE4) -- Found by 002
 	game_pause_address = read_byte(0x622058) -- is true when in the menus or console
+	show_hud = read_byte(0x400003bc) -- set to 0 to hide hud (needs testing)
 	
 	game_state_address = 0x400002E8
 	game_render = read_byte(game_state_address) -- if 0 the screen will be black
@@ -77,8 +81,7 @@ function OnScriptLoad(process, Game, persistent)
 	
 	function fp()
 		fp_anim_address = 0x40000EB8 -- from aLTis
-		game_time = read_word(fp_anim_address) -- time since map was started
-		unknown = read_word(fp_anim_address + 2) -- always 0
+		game_time = read_dword(fp_anim_address) -- time since map was started
 		some_timer = read_byte(fp_anim_address + 4) -- counts up to 9 and resets?
 		unknown = read_byte(fp_anim_address + 5) -- always 0
 		loading = read_byte(fp_anim_address + 6) -- is 0 when game is loading
@@ -132,7 +135,7 @@ function OnScriptLoad(process, Game, persistent)
 		-- from here on it's just node data which sadly cannot be changed
 		
 		fp_weapon_nodes_address = 0x40002C4C -- apparently there's more useful stuff here after node data!
-		render_fp_weapon = read_byte(more_fp_address) -- setting to 0 disables weapon
+		render_fp_weapon = read_byte(fp_weapon_nodes_address) -- setting to 0 disables weapon
 		--here is the node indexes for fp weapon, you can change them for interesting results :v
 		
 		
@@ -143,8 +146,9 @@ function OnScriptLoad(process, Game, persistent)
 	
 	
 	function camera_stuff()
-		camera_address = read_word(0x647498) -- from giraffe. 22192-scripted, 30400-first person, 30704-devcam, 31952-vehicle, 23776-dead camera
-		camera_vehicle_enter_scale = read_float(camera_address - 4) -- only changes when entering or leaving a vehicle (from aLTis)
+		camera_address = 0x647498
+		camera_type = read_word(camera_address) -- from giraffe. 22192-scripted, 30400-first person, 30704-devcam, 31952-vehicle, 23776-dead camera
+		camera_interpolation_scale = read_float(camera_address - 4) -- only changes when entering or leaving a vehicle (from aLTis)
 		--unknown = read_word(camera_address + 2) -- always 68. maybe related to camera_address itself? (from aLTis)
 		camera_object_id = read_dword(camera_address + 12) -- the object camera is tracking when vehicle camera is active (from aLTis)
 		vehicle_seat = read_word(camera_address + 16) -- vehicle seat when vehicle camera is active (from aLTis)
@@ -280,16 +284,24 @@ function OnScriptLoad(process, Game, persistent)
 	gametype = read_dword(announcer_address + 24) -- changes based on gametype
 	announcer_currently_playing = read_dword(announcer_address + 80) -- 0 if not, 1 if true and 2 if game hasn't started. If it's 1 then new announcer sounds won't play
 	
-	--use this function to play a sound
+	--use this function to play a sound on client side
 	
 	function PlayAnnouncerSound(sound_id)
-		announcer_address = 0x64C020
+		local announcer_address = 0x64C020
 		write_dword(announcer_address + 8, 1) -- delay until the sound starts
 		write_dword(announcer_address + 20, sound_id) -- not sure what this is but it makes the sound play
 		write_dword(announcer_address + 80, 2) -- announcer currently playing
 	end
 	
+	--use this function to play a sound on server side
 	
+	function PlayAnnouncerSound(sound_id)
+		local server_announcer_address = 0x5BDE00
+		write_dword(server_announcer_address + 0x8, 1) -- time until first sound in the queue stops playing
+		write_dword(server_announcer_address + 0x14, sound_id) -- second sound ID in the queue (from globals multiplayer information > sounds)
+		write_dword(server_announcer_address + 0x1C, 1) -- second sound in the queue will play
+		write_dword(server_announcer_address + 0x50, 2) -- announcer sound queue
+	end
 	
 	
 	-- keyboard input (from aLTis)
@@ -441,8 +453,32 @@ function OnScriptLoad(process, Game, persistent)
 	mouse_button_4_release = read_byte(mouse_input_address + 23)
 	mouse_button_5_release = read_byte(mouse_input_address + 24)
 	
+	mouse_sensitivity_horizontal = 0x6ABB50
+	mouse_sensitivity_vertical = 0x6ABB54
+	--controller sensitivity here as well? I haven't tested
 	
-	
+	-- controller input (from aLTis)
+	for controller_id = 0,3 do
+		controller_input_address = 0x64D998 + controller_id*0xA0
+		controller_a = read_char(controller_input_address)
+		controller_b = read_char(controller_input_address + 1)
+		controller_x = read_char(controller_input_address + 2)
+		controller_y = read_char(controller_input_address + 3)
+		controller_lb = read_char(controller_input_address + 4)
+		controller_rb = read_char(controller_input_address + 5)
+		controller_back = read_char(controller_input_address + 6)
+		controller_start = read_char(controller_input_address + 7)
+		controller_ls = read_char(controller_input_address + 8)
+		controller_rs = read_char(controller_input_address + 9)
+		-- there is probably more buttons here for other controllers, I only tested x360
+		controller_ls_down = read_long(controller_input_address + 30)
+		controller_ls_right = read_long(controller_input_address + 32)
+		controller_rs_down = read_long(controller_input_address + 34)
+		controller_rs_right = read_long(controller_input_address + 36)
+		controller_trigger = read_long(controller_input_address + 38) -- this value is for both left and right triggers
+		-- ?
+		controller_dpad = read_word(controller_input_address + 96) -- 0xFFFF when nothing is pressed, 0-up, 2-right, 4-down, 6-left
+	end
 	
 	GetGameAddresses(Game) -- declare addresses and confirm the game (pc or ce)
 	game = Game
@@ -790,7 +826,7 @@ function OnClientUpdate(player, objectId)
 		player_team = read_byte(m_player + 0x20) -- Confirmed. (Red = 0) (Blue = 1)
 		--Padding[3] 0x21-0x24
 		player_interaction_obj_id = readident(m_player + 0x24) -- Confirmed. Returns vehi/weap id on interaction. (does not apply to weapons you're already holding)
-		player_interaction_object_type = read_word(m_player + 0x28) -- Confirmed. (Vehicle = 8, Weapon = 7)
+		player_interaction_object_type = read_word(m_player + 0x28) -- Confirmed. (Vehicle = 8, Weapon pick up = 7, Weapon swap = 6, vehicle flip = 11)
 		player_interaction_vehi_seat = read_word(m_player + 0x2A) -- Confirmed. Takes seat number from vehi tag starting with 0. Warthog Seats: (0 = Driver, 1 = Gunner, 2 = Passenger)
 		player_respawn_time = read_dword(m_player + 0x2C) -- Confirmed. Counts down when dead. When 0 you respawn. (1 sec = 30 ticks)
 		player_respawn_time_growth = read_dword(m_player + 0x30) -- Confirmed. Current respawn time growth for player. (1 second = 30 ticks)
@@ -873,7 +909,7 @@ function OnClientUpdate(player, objectId)
 		
 		
 		--unkByte[8] 0x108-0x110 (???)
-		--unkLong[1] 0x110-0x114 (Some timer)
+		player_last_update_time = read_dword(m_player + 0xF0) -- This is the time that the last update was sent (tick count -1)
 		--unkByte[8] 0x114-0x11C (???)
 		--	Player Action Keypresses.
 			player_melee_key = read_bit(m_player + 0x11C, 0) -- Confirmed.
@@ -916,11 +952,13 @@ function OnClientUpdate(player, objectId)
 		unknown = read_word(local_player + 4) -- changes when joining a server
 		unknown = read_word(local_player + 6) -- changes when joining a server
 		unknown = read_dword(local_player + 8)
-		game_active = read_word(local_player + 12) -- changes to 0 when the game is loading
+		player_count = read_byte(local_player + 12) -- setting to 0 disables your player and setting to higher than 1 will enable split screen bars
 		unknown = read_word(local_player + 16) -- always 0
-		cutscene = read_word(local_player + 18) -- changes to 256 during cutscenes (maybe related to value above)
+		cutscene = read_byte(local_player + 17) -- changes to 1 during cutscenes (maybe related to value above)
+		cutscene = read_byte(local_player + 18)
 		unknown = read_dword(local_player + 20)
 		unknown = read_word(local_player + 24) -- some timer, changes when loading
+		-- these values seem to change based on which cluster you're in
 		unknown = read_word(local_player + 26) -- changes based on map, 1 when in menu
 		unknown = read_word(local_player + 28) -- changes based on map
 		unknown = read_word(local_player + 30)
@@ -958,13 +996,50 @@ function OnClientUpdate(player, objectId)
 		unknown = read_word(local_player + 206)
 		unknown = read_dword(local_player + 208)
 		
-		unknown = read_dword(local_player + 224) -- vehicle camera related
-		unknown = read_dword(local_player + 228) -- vehicle camera related
+		camera_pitch_range_down = read_float(local_player + 224) -- how low can the player aim (in radians)
+		camera_pitch_range_up = read_float(local_player + 228) -- how high can the player aim (in radians)
 		
 
 		-- everything from here on is related to contrails
 		
 		
+		--particles (from aLTis)
+		particles = read_dword(0x8160F0) + 0x20
+		unknown = read_byte(particles + 0x1) -- always 4
+		unknown = read_byte(particles + 0x2) -- always 70
+		game_active = read_byte(particles + 0x3) -- 0 when the game is loading, 1 otherwise
+		data = read_dword(particles + 0x8) -- just says d@t@ :v
+		particle_count = read_word(particles + 0xC) -- these seem to be different from each other
+		particle_count2 = read_word(particles + 0xE) -- these seem to be different from each other
+		particle_count3 = read_word(particles + 0x10) -- these seem to be different from each other
+		particle_count4 = read_word(particles + 0x12) -- keeps counting up and doesn't reset
+		particle_address = read_dword(particles + 0x14) -- particles array here
+		particle_size = 0x70 -- still dont know this one
+		for i=0,particle_count2-1 do
+			local address = particle_address + i*particle_size
+			unknown = read_word(address + 0x0) -- seems to change when particle is active (visible), otherwise it's 0
+			unknown = read_word(address + 0x2) -- always 0, maybe related to value above?
+			particle_tag_id = read_dword(address + 0x4) -- tag id of the particle tag
+			parent_object = read_dword(address + 0x8) -- object id of the object that created this particle (if object is attached to marker!)
+			unknown = read_word(address + 0xC)
+			unknown = read_dword(address + 0xE)
+			-- I don't know what these values are and I can't be bothered looking into it
+			part_timer = read_float(address + 0x14) -- increases from 0 to it's lifetime value (in seconds)
+			unknown = read_float(address + 0x1C) -- similar to the value above but not exactly?
+			-- I don't know what these values are and I can't be bothered looking into it
+			part_x = read_float(address + 0x30) -- position
+			part_y = read_float(address + 0x34) -- position
+			part_z = read_float(address + 0x38) -- position
+			part_rot_1 = read_float(address + 0x3C) -- rotation
+			part_rot_2 = read_float(address + 0x40) -- rotation
+			part_rot_3 = read_float(address + 0x44) -- rotation
+			part_vel_x = read_float(address + 0x48) -- velocity
+			part_vel_y = read_float(address + 0x4C) -- velocity
+			part_vel_z = read_float(address + 0x50) -- velocity
+			part_rot_vel1 = read_float(address + 0x54) -- rotation velocity
+			part_rot_vel2 = read_float(address + 0x58) -- rotation velocity
+			part_scale = read_float(address + 0x5C) -- scale
+		end
 		
 		
 		--effect locations
@@ -994,7 +1069,9 @@ function OnClientUpdate(player, objectId)
 		
 		-- obj struct. This struct applies to ALL OBJECTS. 0x0 - 0x1F4
 		obj_tag_id = read_dword(object) -- Confirmed with HMT. Tag Meta ID / MapID / TagID.
-		--obj_object_role = read_dword(object + 0x4) -- From OS. (0 = Master, 1 = Puppet, 2 = Puppet controlled by local player, 3 = ???) Always 0?
+		obj_object_role = read_dword(object + 0x4) -- From OS. (0 = Master, 1 = Puppet, 2 = Puppet controlled by local player, 3 = ???) Only works on client side?
+		
+		-- maybe these 2 are just bytes?
 		--	bitmask32:
 			obj_is_not_moving = read_bit(object + 0x8, 0) -- Tested. Is true when object is not moving (from aLTis)
 		--	unkBits[8] 1-7 (???)
@@ -1026,9 +1103,11 @@ function OnClientUpdate(player, objectId)
 			obj_frozen = read_bit(object + 0x10, 20) -- Center of object's radius stays where the object was spawned, moving the object away from it usually derenders it. Object cannot be removed too when when it's true so it might mean something else (from aLTis)
 			obj_is_outside_of_map = read_bit(object + 0x10, 21) -- True if outside of map, False if not
 		--	obj_beautify_bit = read_bit(object + 0x10, 22) -- (???) Always False?
-			obj_only_aim_when_moving = read_bit(object + 0x10, 23) -- When true vehicle will not aim unless it's moving. If set on biped then the biped's model will stay still while the invisible biped moves (from aLTis)
+			obj_optimized = read_bit(object + 0x10, 23) -- When true vehicle will not aim unless it's moving. If set on biped then the biped's model will stay still while the invisible biped moves. It will also prevent the biped from being affected by velocity (from aLTis)
 			obj_is_collideable = read_bit(object + 0x10, 24) -- Set this to true to allow other objects to pass through you. (doesn't apply to bipeds and vehicle on vehicle collision).
-		--	unkBits[7] 0x10 25-31
+		--	unkBits[1] 0x10 125
+			obj_pickup = read_bit(object + 0x10, 26) -- If object is a weapon it turns true when being picked up (from aLTis)
+		--	unkBits[7] 0x10 26-31
 		
 		
 		obj_marker_id = read_dword(object + 0x14) -- Tested. Continually counts up from like 89000...
@@ -1054,7 +1133,8 @@ function OnClientUpdate(player, objectId)
 		obj_roll_vel = read_float(object + 0x94) -- Confirmed for vehicles. Current velocity for roll.
 		
 		obj_locId = read_dword(object + 0x98) -- Confirmed. Each map has dozens of location IDs, used for general location checking.
-		--unkLong[1] 0x9C (Padding Maybe?) -- when not in vehicle it points to some object, weird values that make no sense otherwise 0x40080000
+		obj_cluster_id = read_word(object + 0x9C) -- Tested. Seems to be the ID of the cluster the object is in (from aLTis)
+		obj_some_value = read_word(object + 0x9E) -- I don't know what this is (from aLTis)
 		-- Apparently these are coordinates, used for the game code's trigger volume point testing
 		obj_center_x_coord = read_float(object + 0xA0) -- Tested. Coordinate + origin offset
 		obj_center_y_coord = read_float(object + 0xA4) -- Tested. Coordinate + origin offset
@@ -1065,7 +1145,7 @@ function OnClientUpdate(player, objectId)
 		--Padding[2] 0xB6-0xB8 
 		obj_team = read_word(object + 0xB8) -- Confirmed. If objective then this >= 0, -1 = is NOT game object. Otherwise: (Red = 0) (Blue = 1) also means object team
 		obj_namelist_index = read_word(object + 0xBA) -- From OS. Index of the object name in the scenario tag. (from aLTis)
-		--obj_moving_time = read_word(object + 0xBC) -- (???) Always 0? 
+		obj_moving_time = read_word(object + 0xBC) -- Tested. Ticks since the last time the object has moved (from aLTis)
 		--obj_region_permutation_variant_id = read_word(object + 0xBE) -- (???) Always 0?
 		obj_player_id = readident(object + 0xC0) -- Confirmed. Full DWORD ID of player.
 		obj_owner_obj_id = readident(object + 0xC4) -- Confirmed. Parent object ID of this object (DOES NOT APPLY TO BIPEDS/PLAYER OBJECTS)
@@ -1075,8 +1155,8 @@ function OnClientUpdate(player, objectId)
 		obj_antr_meta_id = readident(object + 0xCC) -- From DZS. Animation tag (from aLTis)
 		obj_base_animation = read_word(object + 0xD0) -- Tested. The base animation that is currently playing. (by aLTis)
 		obj_base_animation_frame = read_word(object + 0xD2) -- Tested. Current frame of the base animation (by aLTis)
-		obj_animation_scale = read_word(object + 0xD4) -- Tested. Has to do with transitions between base animations (from aLTis)
-		obj_animation_scale2 = read_word(object + 0xD6) -- Also something about transitions
+		obj_animation_transition_frame = read_word(object + 0xD4) -- Interpolates between previous and new animation. Counts up every frame until the value below is reached (from aLTis)
+		obj_animation_transition_length = read_word(object + 0xD6) -- How many frames it takes to interpolate the animation (from aLTis)
 		
 		obj_max_health = read_float(object + 0xD8) -- Confirmed. Takes value from coll tag.
 		obj_max_shields = read_float(object + 0xDC) -- Confirmed. Takes value from coll tag.
@@ -1217,12 +1297,15 @@ function OnClientUpdate(player, objectId)
 			unit_swarm_prev_obj_id = readident(m_unit + 0x200) -- From OS.
 			
 			--	Client Non-Instantaneous bitmask32
-			--	unkBit[4] 0-3 (???)
+				unit_is_active = read_bit(m_unit + 0x204, 0) -- Set to false to prevent unit from moving in any way (from aLTis)
+			--	unkBit[4] 1-3 (???)
 				unit_is_invisible = read_bit(m_unit + 0x204, 4) -- Confirmed. (True if currently invisible, False if not)
 				unit_powerup_additional = read_bit(m_unit + 0x204, 5) -- From OS. Guessing this is set if you have multiple powerups at the same time.
-				unit_is_currently_controllable_bit = read_bit(m_unit + 0x204, 6) -- From OS. I'm just going to assume this works.
-			--	unkBit[9] 7-15 (???)
-			--	unit_doesNotAllowPlayerEntry = read_bit(m_unit + 0x204, 16) -- From DZS. For vehicles. (True if vehicle is allowing players to enter, False if not)
+				unit_is_currently_controllable_bit = read_bit(m_unit + 0x204, 6) -- From OS. Same as the first bit?
+			--	unkBit[9] 7-14 (???)
+			--	unit_vehicle_exit_thingy = read_bit(m_unit + 0x204, 8) turns true for a moment when exiting a vehicle? (from aLTis)
+			--	unkBit[9] 9-14 (???)
+				unit_doesNotAllowPlayerEntry = read_bit(m_unit + 0x204, 16) -- From DZS. For vehicles. (True if vehicle is allowing players to enter, False if not)
 			--	unkBit[2] 17-18 (???)
 				unit_flashlight = read_bit(m_unit + 0x204, 19) -- Confirmed. (True = flashlight on, False = flashlight off)
 				unit_doesnt_drop_items = read_bit(m_unit + 0x204, 20) -- Confirmed. (True if object doesn't drop items on death, otherwise False). (Clients will see player drop items, then immediately despawn)
@@ -1231,7 +1314,7 @@ function OnClientUpdate(player, objectId)
 			--	unkBit[1] 23 (???)
 				unit_is_suspended = read_bit(m_unit + 0x204, 24) -- Confirmed. (True if frozen/suspended, False if not)
 				unit_is_moving_randomly = read_bit(m_unit + 0x204, 25) -- Tested. If you set this to true the unit will move around randomly lol (from aLTis)
-			--	unkBit[2] 26 (???)
+				unit_night_vision = read_bit(m_unit + 0x204, 26) -- True when night vision is on (from aLTis)
 			--	unit_is_possessed = read_bit(m_unit + 0x204, 27) -- (???) Always False?
 				unit_flashlight_currently_on = read_bit(m_unit + 0x204, 28) -- Forces the unit to enable flashlight when true (from aLTis)
 				unit_flashlight_currently_off = read_bit(m_unit + 0x204, 29) -- Forces the unit to disable flashlight when true (from aLTis)
@@ -1255,7 +1338,8 @@ function OnClientUpdate(player, objectId)
 				unit_actionkey_presshold = read_bit(m_unit + 0x208, 14)	-- Confirmed. (True when holding action key,  False when not)
 			--	emptyBit[1] 15
 			
-			--unkWord[2] 0x20A-0x20E related to first two words in unit_global_data
+			--unkWord[1] 0x20A related to first two words in unit_global_data
+			unit_some_timer = read_word(m_unit + 0x20C) -- Tested. Counts from 0 to 18 (or a different number) and resets. (from aLTis)
 			--unit_shield_sapping = read_char(m_unit + 0x20E) -- (???) Always 0?
 			unit_base_seat_index = read_char(m_unit + 0x20F) -- From OS.
 			--unit_time_remaining = read_dword(m_unit + 0x210) -- (???) Always 0?
@@ -1435,7 +1519,7 @@ function OnClientUpdate(player, objectId)
 			unit_causing_objId = readident(m_unit + 0x40C) -- Confirmed. ObjId causing damage to this object.
 			--unit_flamer_causer_objId = readident(m_unit + 0x410) -- (???) Always 0xFFFFFFFF?
 			--Padding[8] 0x414-0x41C
-			--unit_death_time = read_dword(m_unit + 0x41C) -- (???) Always 0xFFFFFFFF?
+			unit_death_time = read_dword(m_unit + 0x41C) -- Tested. Time when the biped was killed (by aLTis)
 			--unit_feign_death_timer = read_word(m_unit + 0x420) -- (???) Always 0xFFFFFFFF?
 			unit_camo_regrowth = read_word(m_unit + 0x422) -- Confirmed. (1 = Camo Failing due to damage/shooting)
 			unit_stun_amount = read_float(m_unit + 0x424) -- Tested. Changes to almost 1 when getting hit by plasma weapons
@@ -1523,9 +1607,8 @@ function OnClientUpdate(player, objectId)
 			landing_strentgh = read_byte(m_biped + 0x4D1) --	Instantly changes to a value depenging of how hard the fall was (from aLTis)
 			bipd_movement_state = read_byte(m_biped + 0x4D2) -- Confirmed. (Standing = 0) (Walking = 1) (Idle/Turning = 2) (Gesturing?? = 3)
 			--unkByte[5] 0x4D3-0x4D8 (Padding Maybe?)
-			bipd_action = read_word(m_biped + 0x4D8) -- Tested. Some kind of ID of the BSP surface the biped is walking on, 0xFFFF when in air (from aLTis)
-			bipd_action2 = read_byte(m_biped + 0x4DA) -- Tested. Related to the above? 255 if in air and 0 if touching a surface (from aLTis)
-			bipd_action3 = read_byte(m_biped + 0x4DB) -- Tested. Same as above (might be word?) (from aLTis)
+			bipd_surface_id = read_dword(m_biped + 0x4D8) -- Tested. ID of the collision BSP surface the biped is walking on, 0xFFFFFFFF when in air (from aLTis)
+			--unknown dword 0x4D8 + 4
 			bipd_x_coord = read_float(m_biped + 0x4E0) -- Confirmed.
 			bipd_y_coord = read_float(m_biped + 0x4E4) -- Confirmed.
 			bipd_z_coord = read_float(m_biped + 0x4E8) -- Confirmed.
@@ -1538,14 +1621,14 @@ function OnClientUpdate(player, objectId)
 			bipd_jump_time = read_char(m_biped + 0x504) -- Tested. Counts up from 0 after landing from a jump, and returns to 0 after you hit the ground (1 sec = 30 ticks).
 			bipd_melee_timer = read_byte(m_biped + 0x505) -- Time until melee is finished (by aLTis)
 			--Padding[1] 0x507-0x508
-			bipd_landing_thingy = read_byte(m_biped + 0x508) -- turns to 0 when landing, stays 0 when landing hard. 0xFF otherwise. (from aLTis)
+			bipd_landing_thingy = read_byte(m_biped + 0x508) -- turns to 0 when landing, 1 when landing hard. 0xFF otherwise. (from aLTis)
 			--Padding[2] 0x50A-0x50C
 			bipd_crouch_scale = read_float(m_biped + 0x50C) -- Confirmed. How crouched you are. (0 to 1) (Crouching = 1) (Standing = 0)
-			--unkFloat[1] 0x510-0x514 (???)
-			bipd_surface_angle_x = read_float(m_biped + 0x514) -- Tested. Not 100% sure but it seems to be the angle of the surface where biped stands (from aLTis)
-			bipd_surface_angle_y = read_float(m_biped + 0x518) -- Tested. Not 100% sure but it seems to be the angle of the surface where biped stands (from aLTis)
-			bipd_surface_angle_z = read_float(m_biped + 0x51C) -- Tested. Not 100% sure but it seems to be the angle of the surface where biped stands (from aLTis)
-			bipd_surface_angle_d = read_float(m_biped + 0x520) -- Tested. Not 100% sure but it seems to be the angle of the surface where biped stands (from aLTis)
+			--unkFloat[1] 0x510-0x514 (???) always 0
+			bipd_surface_angle_x = read_float(m_biped + 0x514) -- Tested. the angle of the surface where biped stands (from aLTis)
+			bipd_surface_angle_y = read_float(m_biped + 0x518) -- Tested. the angle of the surface where biped stands (from aLTis)
+			bipd_surface_angle_z = read_float(m_biped + 0x51C) -- Tested. the angle of the surface where biped stands (from aLTis)
+			bipd_surface_angle_d = read_float(m_biped + 0x520) -- Tested. Not 100% sure
 			--unkChar[2] 0x524-0x526 (???)
 			--	bitmask8
 				bipd_baseline_valid = read_bit(m_biped + 0x526, 0) -- From OS.
@@ -1578,6 +1661,27 @@ function OnClientUpdate(player, objectId)
 				bipd_shield_stun_time_greater_than_zero2 = read_bit(m_biped + 0x54C, 0) -- From OS.
 			--	unkBit[7] 1-7 (???)
 			--Padding[3] 0x54D-0x550
+			
+			--this function gets the material type and shader that the player is walking on. BSP only. (from aLTis)
+			function GetPlayerBSPSurface(player, bsp_tag)
+				local surface_touched = read_dword(player + 0x4D8)
+				local tag = get_tag("sbsp", bsp_tag)
+				if tag then
+					local bsp = read_dword(tag + 0x14)
+					local bsp_col = read_dword(bsp + 0xB0 + 4)
+					local surface_count = read_dword(bsp_col + 0x3C)
+					local surface_address = read_dword(bsp_col + 0x3C + 4)
+					if surface_touched <= surface_count then
+						local address = surface_address + surface_touched*12
+						local material = read_short(address + 0x0A)
+						local materials_address = read_dword(bsp + 0xBC - 0x18 + 4)
+						
+						
+						local material_type = read_word(materials_address + material*20 + 0x12)
+						local shader_name = read_string(read_dword(materials_address + material*20 + 0x4))
+					end
+				end
+			end
 			
 			--these are all just friggin rediculous...
 			function getBodyPart(address, offset)
@@ -1852,8 +1956,9 @@ function OnObjectCreation(objectId)
 			
 			--	bitmask32:
 				item_in_inventory = read_bit(item_struct + 0x1F4, 0) -- From OS.
-				--unkBit 1
-				item_in_inventory = read_bit(item_struct + 0x1F4, 2) -- Setting to true removes collision from the weapon (aLTis)
+				item_in_inventory2 = read_bit(item_struct + 0x1F4, 1) -- Same as above?? (from aLTis)
+				item_collision = read_bit(item_struct + 0x1F4, 2) -- Setting to true removes collision from the weapon (aLTis)
+				item_on_ground = read_bit(item_struct + 0x1F4, 3) -- Turns true when item is stationary (aLTis)
 			--	unkBit[31] 3-31 (Padding Maybe?)
 			item_detonation_countdown = read_word(item_struct + 0x1F8) -- Confirmed. (1 sec = 30 ticks)
 			item_collision_surface_index = read_word(item_struct + 0x1FA) -- From OS.
@@ -1868,8 +1973,8 @@ function OnObjectCreation(objectId)
 			item_unknown_x_vel = read_float(item_struct + 0x218)
 			item_unknown_y_vel = read_float(item_struct + 0x21C)
 			item_unknown_z_vel = read_float(item_struct + 0x220)
-			item_unknown_xy_angle = read_float(item_struct + 0x224)
-			item_unknown_z_angle = read_float(item_struct + 0x228)
+			item_rot_vel_xy = read_float(item_struct + 0x224)
+			item_rot_vel_z = read_float(item_struct + 0x228) -- 1 by default?
 			
 			if obj_type == 2 then -- weapons
 			
@@ -1917,7 +2022,8 @@ function OnObjectCreation(objectId)
 				--	trigger_flags bitmask32:
 				weap_trigger_currently_not_firing = read_bit(weap_struct + 0x264, 0) -- From DZS.
 				--	unkBit[31] 0x264-0x268 1-31 (???)
-				weap_trigger_autoReloadCounter = read_dword(weap_struct + 0x268) -- From DZS.
+				weap_trigger_autoReloadCounter = read_word(weap_struct + 0x268) -- From DZS.
+				weap_trigger_firing_effect_id = read_word(weap_struct + 0x26A) -- The ID of weapon's firing effect that should play next. Somehow related to previous value (from aLTis)
 				--unkWord[2] 0x26C-0x26E firing effect related. Always 0, if you set it to a higher value it counts down with every shot. No idea what this is
 				weap_trigger_rounds_since_last_tracer = read_word(weap_struct + 0x26E) -- From OS.
 				weap_trigger_rate_of_fire = read_float(weap_struct + 0x270) -- From OS.
@@ -1945,7 +2051,7 @@ function OnObjectCreation(objectId)
 				--Primary Magazine State:
 				weap_mag1_state = read_word(weap_struct + 0x2B0) -- From OS. (0 = Idle) (1 = Chambering Start) (2 = Chambering Finish) (3 = Chambering)
 				weap_mag1_chambering_time = read_word(weap_struct + 0x2B2) -- From OS. Can set to 0 to finish reloading. (1 sec = 30 ticks)
-				weap_reload_animation_frame_count = read_word(0x2B4) -- Tested. Same as in animation tag (from aLTis)
+				weap_reload_animation_frame_count = read_word(weap_struct + 0x2B4) -- Tested. Same as in animation tag (from aLTis)
 				weap_primary_ammo = read_word(weap_struct + 0x2B6) -- Confirmed. Unloaded ammo for magazine 1.
 				weap_primary_clip = read_word(weap_struct + 0x2B8) -- Confirmed. Loaded clip for magazine 1.
 				--unkWord[3] 0x2BA-0x2C0 game tick value,unkWord,possible enum
@@ -1968,9 +2074,9 @@ function OnObjectCreation(objectId)
 				weap_baseline_index = read_byte(weap_struct + 0x2E1) -- From OS.
 				weap_message_index = read_byte(weap_struct + 0x2E2) -- From OS.
 				--Padding[1] 0x2E3-0x2E4
-				weap_x_coord = read_float(weap_struct + 0x2E4) -- From OS.
-				weap_y_coord = read_float(weap_struct + 0x2E8) -- From OS.
-				weap_z_coord = read_float(weap_struct + 0x2EC) -- From OS.
+				weap_x_coord = read_float(weap_struct + 0x2E4) -- Spawn coordinates (from aLTis)
+				weap_y_coord = read_float(weap_struct + 0x2E8) -- Spawn coordinates (from aLTis)
+				weap_z_coord = read_float(weap_struct + 0x2EC) -- Spawn coordinates (from aLTis)
 				weap_x_vel = read_float(weap_struct + 0x2F0) -- From OS.
 				weap_y_vel = read_float(weap_struct + 0x2F2) -- From OS.
 				weap_z_vel = read_float(weap_struct + 0x2F4) -- From OS.
@@ -1993,9 +2099,9 @@ function OnObjectCreation(objectId)
 				eqip_message_index = read_char(eqip_struct + 0x246) -- From OS.
 				--Padding[1] 0x247-0x248
 				-- baseline update
-				eqip_x_coord = read_float(eqip_struct + 0x248) -- From OS.
-				eqip_y_coord = read_float(eqip_struct + 0x24C) -- From OS.
-				eqip_z_coord = read_float(eqip_struct + 0x250) -- From OS.
+				eqip_x_coord = read_float(eqip_struct + 0x248) -- Spawn coordinates (from aLTis)
+				eqip_y_coord = read_float(eqip_struct + 0x24C) -- Spawn coordinates (from aLTis)
+				eqip_z_coord = read_float(eqip_struct + 0x250) -- Spawn coordinates (from aLTis)
 				eqip_x_vel = read_float(eqip_struct + 0x254) -- From OS.
 				eqip_y_vel = read_float(eqip_struct + 0x258) -- From OS.
 				eqip_z_vel = read_float(eqip_struct + 0x25C) -- From OS.
@@ -2055,7 +2161,7 @@ function OnObjectCreation(objectId)
 				proj_detonation_time = read_float(proj_struct + 0x244) -- Tested. Math for this: (1/30/'timer' from projectile tag) (from aLTis)
 				proj_arming_timer = read_float(proj_struct + 0x248) -- Tested. If 'aiming time' in tag is not 0, then this tells how long the projectile has existed in seconds (from aLTis)
 				proj_arming_time = read_float(proj_struct + 0x24C) --Tested. Math for this: (1/30/'arming time' from projectile tag) (from aLTis)
-				proj_range_traveled = read_word(proj_struct + 0x250) -- From OS. If the proj definition's "maximum range" is > 0, divide this value by "maximum range" to get "range remaining".
+				proj_range_traveled = read_float(proj_struct + 0x250) -- From OS. If the proj definition's "maximum range" is > 0, divide this value by "maximum range" to get "range remaining".
 				proj_x_vel = read_float(proj_struct + 0x254) -- From OS.
 				proj_y_vel = read_float(proj_struct + 0x258) -- From OS.
 				proj_z_vel = read_float(proj_struct + 0x25C) -- From OS.
