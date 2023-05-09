@@ -21,7 +21,6 @@ function OnScriptLoad(process, Game, persistent)
 	--For Chimera:
 	map_name_address = read_string(0x00643064) -- maybe wrong?
 	server_ip_address = read_string(0x0063EE28)
-	reticle_is_red = read_dword(0x400008CC) -- 1 when reticle is red (other hud stuff is stored here but you can't change most things)
 	
 	-- node information is stored here:
 	read_float(object + 0x550) -- Biped
@@ -78,6 +77,59 @@ function OnScriptLoad(process, Game, persistent)
 	unknown = read_byte(game_state_address + 3) -- changing breaks animations and crashes the game sometimes
 	-- the rest of the values change sometimes but no idea what they mean
 	
+	function HUD()
+		local hud_address = 0x400007F4
+		local hud_seat_id = read_byte(hud_address) -- changes depending on vehicle seat or weapon (from hud_icon_messages)
+		local unknown = read_byte(hud_address+1)--changes based on weapon but 0 when vehicle?
+		local unknown = read_byte(hud_address+2)--changes based on weapon but 0 when vehicle?
+		local unknown = read_byte(hud_address+3)--always 64?
+		local hud_vehicle_id = read_byte(hud_address+4) -- changes depending on vehicle (from hud_icon_messages)
+		-- 8 - 28 - unknown
+		local unknown = read_dword(hud_address+32) -- idk
+		local unknown = read_byte(hud_address+36) -- turns to 1 when interacting with a weapon or a vehicle
+		local unknown = read_byte(hud_address+37) -- turns to 3 when interacting with a vehicle
+		-- 38 - 41 - unknown
+		local unknown = read_byte(hud_address+42) -- turns to 1 when interacting with a weapon
+		-- missed some health and shield values here...
+		local unknown = read_byte(hud_address+94) -- never changes?
+		local game_time = read_dword(hud_address+96) -- ticks since the game started
+		local player_object = read_dword(hud_address+112) -- ID of the player biped object
+		local flashlight = read_word(hud_address+116) -- 1 if flashlight is on
+		local flashlight_timer = read_word(hud_address+118) -- counts up to like 176 and resets when flashlight is on
+		local shield_recharge = read_dword(hud_address+120) -- number increases when shields are down and decreases as they charge
+		local some_damage = read_dword(hud_address+124) -- number changes when getting damaged, not sure what this means
+		local shield_recharge2 = read_dword(hud_address+128) -- number changes when shields are charging, not sure what this means
+		local shield_recharge3 = read_dword(hud_address+132) -- number changes when shields are charging, not sure what this means
+		local shield_down = read_dword(hud_address+136) -- number changes when shields are down and not recharging
+		-- 140 - 168 - unknown
+		local unknown = read_dword(hud_address+172) -- always 0?
+		local some_timer = read_dword(hud_address+176) -- changes only in some vehicles. Probably related to the time since the game started
+		local some_timer2 = read_dword(hud_address+180) -- changes only in some vehicles. Time when the player entered the vehicle?
+		local some_timer3 = read_dword(hud_address+184) -- usually 1 but counts up on some maps?
+		-- 188 - unknown
+		local some_timer4 = read_dword(hud_address+192) -- counts up every 16 ticks. I think it has to do with low ammo/shields blinking
+		local some_timer5 = read_dword(hud_address+196) -- counts up every 16 ticks when zoomed in
+		-- 200 - 204 - unknown
+		local weapon_ID = read_dword(hud_address+208) -- current weapon ID (applies to vehicle weapons too!)
+		local grenade_timer = read_dword(hud_address+212) -- sometimes changes when throwing a grenade
+		local reticle_is_red = read_dword(hud_address+216) -- turns to 1 when reticle is red
+		local zoom_level = read_dword(hud_address+220) -- for HUD only. Forcing values above 0 will show scope mask even when unzoomed
+		-- 224 - unknown
+		local should_reload_warning = read_dword(hud_address+228) -- time when weapon shows "should reload" warning
+		-- 232 - 236 - unknown
+		local low_battery_warning = read_dword(hud_address+240) -- time when weapon shows "flash battery" warning
+		local reloading_warning = read_dword(hud_address+244) -- time when weapon shows "reload/overheat" warning
+		local no_ammo_warning = read_dword(hud_address+248) -- time when weapon shows "flash when firing and no ammo" warning
+		local no_grenades_warning = read_dword(hud_address+252) -- time when weapon shows "flash when throwing and no grenades" warning
+		local low_ammo_warning = read_dword(hud_address+256) -- time when weapon shows "low ammo and none left to reload" warning
+		-- 260 - 288 - unknown
+		
+		-- hud_address+292 - Here is a bitmask of which reticle warning should be shown. They match the order of crosshair type in the tag. Can use this to hide reticle and stuff
+		
+		-- 294 - 344 - unknown
+		
+		
+	end
 	
 	function fp()
 		fp_anim_address = 0x40000EB8 -- from aLTis
@@ -100,8 +152,8 @@ function OnScriptLoad(process, Game, persistent)
 		unknown = read_word(fp_anim_address + 28) -- changes every time you switch weapons
 		weapon_base_anim_id = read_word(fp_anim_address + 30) -- ID of the base animation from fp animations tag currently playing
 		weapon_base_anim_frame = read_word(fp_anim_address + 32) -- frame of the base animation
-		weapon_moving_anim_id = read_word(fp_anim_address + 34) -- ID of the base animation from fp animations tag currently playing
-		weapon_moving_anim_frame = read_word(fp_anim_address + 36) -- frame of the base animation
+		weapon_moving_anim_id = read_word(fp_anim_address + 34) -- ID of the moving animation from fp animations tag currently playing
+		weapon_moving_anim_frame = read_word(fp_anim_address + 36) -- frame of the moving animation
 		unknown = read_word(fp_anim_address + 38) -- always 0
 		unknown = read_word(fp_anim_address + 40) -- always 0xFFFF
 		unknown = read_word(fp_anim_address + 42)
@@ -271,6 +323,7 @@ function OnScriptLoad(process, Game, persistent)
 		camera_interpolation_rot_something = read_float(camera_address + 0x378) 
 		camera_interpolation_rot_left = read_float(camera_address + 0x37C) 
 	end
+	
 	
 	
 	-- multiplayer announcer stuff (from aLTis)
@@ -973,7 +1026,8 @@ function OnClientUpdate(player, objectId)
 			jump = read_bit(local_player + 172, 1)
 			-- unknow 2-3
 			flashlight = read_bit(local_player + 172, 4)
-			-- unknow 5-6
+			-- unknow 5
+			action = read_bit(local_player + 172, 6)
 			melee = read_bit(local_player + 172, 7)
 			-- unknow 8-9
 			reload = read_bit(local_player + 172, 10)
