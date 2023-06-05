@@ -110,7 +110,7 @@ function OnScriptLoad(process, Game, persistent)
 		local some_timer4 = read_dword(hud_address+192) -- counts up every 16 ticks. I think it has to do with low ammo/shields blinking
 		local some_timer5 = read_dword(hud_address+196) -- counts up every 16 ticks when zoomed in
 		-- 200 - 204 - unknown
-		local weapon_ID = read_dword(hud_address+208) -- current weapon ID (applies to vehicle weapons too!)
+		local weapon_object = read_dword(hud_address+208) -- current weapon ID (applies to vehicle weapons too!)
 		local grenade_timer = read_dword(hud_address+212) -- sometimes changes when throwing a grenade
 		local reticle_is_red = read_dword(hud_address+216) -- turns to 1 when reticle is red
 		local zoom_level = read_dword(hud_address+220) -- for HUD only. Forcing values above 0 will show scope mask even when unzoomed
@@ -660,7 +660,7 @@ function GetGameAddresses(game)
 -- Structs/headers. -- these should be lower by 0x20
 	stats_header = 0x5BD740
 	stats_globals = 0x5BD8B8
-	ctf_globals = 0x5BDBB8 -- tested value = 0x5BDB98
+	ctf_globals = 0x5BDBB8 -- tested value = 0x5BDB98 0x64BDB8 ??????
 	slayer_globals = 0x5BE108
 	oddball_globals = 0x5BDE78
 	koth_globals = 0x5BDBF0 -- tested value = 0x5BDBD0
@@ -1056,6 +1056,70 @@ function OnClientUpdate(player, objectId)
 
 		-- everything from here on is related to contrails
 		
+		--sounds (from aLTis)
+		sounds = read_dword(0x6C0580)
+		sound_count = read_word(sounds + 44) --(id of the new sound in the struct? idk)
+		sound_count2 = read_word(sounds + 46) --(id of the new sound in the struct? idk)
+		sound_count3 = read_word(sounds + 48) -- actual count of sounds currently playing
+		sound_count3 = read_byte(sounds + 50) -- counts up
+		--unknown = read_byte(sounds + 51)
+		sound_struct_address = read_dword(sounds + 52)
+		
+		--struct size 176
+		local count = 0
+		for i=0,100 do -- there's probably a better way of doing this
+			local struct = sound_struct_address + i*176
+			if count >= sound_count3 then
+				break
+			end
+			count = count + 1
+			
+			sound_counter = read_byte(struct + 0) -- increases every time a sound is played
+			--unknown = read_word(struct + 1) -- 0, changes when a sound is playing, maybe counter related? bitmask??
+			--unknown = read_word(struct + 2) -- 0, changes to 1 or 2. bitmask??
+			--unknown = read_dword(sounds + 4) -- always 2? sometimes 6
+			sound_tag_id = read_dword(struct + 8) -- tag id of the sound
+			sound_parent = read_dword(struct + 12) -- object that the sound is coming from
+			--unknown = read_dword(struct + 16) -- changes sometimes when a sound plays
+			--unknown = read_word(struct + 20) -- either 0 or 1. Seems to be 0 when playing UI related sounds
+			--unknown = read_word(struct + 22) -- changes to some random number sometimes
+			sound_scale = read_float(struct + 24) -- usually 1.0 (not 100% sure this is correct)
+			sound_gain = read_float(struct + 28) -- usually 1.0
+			sound_x = read_float(struct + 32) -- position
+			sound_y = read_float(struct + 36) -- position
+			sound_z = read_float(struct + 40) -- position
+			sound_rot1 = read_float(struct + 44) -- rotation
+			sound_rot2 = read_float(struct + 48) -- rotation
+			sound_rot3 = read_float(struct + 52) -- rotation
+			sound_vel_x = read_float(struct + 56) -- velocity
+			sound_vel_y = read_float(struct + 60) -- velocity
+			sound_vel_z = read_float(struct + 64) -- velocity
+			--unknown = read_dword(struct + 68) -- no idea
+			--unknown = read_dword(struct + 72) -- no idea
+			--unknown = read_dword(struct + 76) -- 0, changes only when UI sounds play
+			--unknown = read_dword(struct + 80) -- 0, changes only when UI sounds play (source of the sound?)
+			--unknown = read_word(struct + 84) -- 0, changes to 1 when firing and to other numbers when doing other actions
+			--unknown = read_char(struct + 86) -- 0, changes to -1 sometimes?
+			--unknown = read_dword(struct + 88) -- 0, changes when firing?
+			--unknown = read_dword(struct + 92) -- 0, changes when firing?
+			--unknown = read_dword(struct + 96) -- 0, changes when firing?
+			--unknown = read_dword(struct + 100) -- maybe float?
+			--unknown = read_dword(struct + 104) -- always 0, only changes when firing chaingun hog???
+			--???
+			--unknown = read_dword(struct + 132) -- increases like a time when sound started but in a weird way?
+			sound_pitch = read_float(struct + 136) -- pitch of the sound
+			sound_order_id = read_word(struct + 140) -- counts up with every sound that is currently playing and reset if they stop. 0xFFFF if the sound is not playing
+			sound_pitch_range = read_word(struct + 142) --from the .sound tag
+			sound_permutation = read_dword(struct + 144) --from the .sound tag
+			--unknown = read_dword(struct + 148) -- changes to 0 or 1 for sound loops
+			--unknown = read_dword(struct + 152) -- 0xFFFFFFFF for sound loops?
+			sound_fade = read_float(struct + 156) -- 1.0 when sound is fading in or out
+			--some float = read_float(struct + 160) -- sound fade related
+			--unknown = read_dword(struct + 164) -- fade related
+			--unknown = read_dword(struct + 168) -- similar to the value above
+			sound_fp = read_dword(struct + 172) -- 1 if sound happens in fp?
+		end
+		
 		
 		--particles (from aLTis)
 		particles = read_dword(0x8160F0) + 0x20
@@ -1245,7 +1309,7 @@ function OnClientUpdate(player, objectId)
 		
 		obj_weap_obj_id = readident(object + 0x118) -- Confirmed. Current weapon  id. (also applies to a grenade you're throwing!!!)
 		obj_vehi_obj_id = readident(object + 0x11C) -- Confirmed. Current vehicle id. (Could also be known as the object's parent ID.)
-		obj_vehi_seat = read_word(object + 0x120) -- Confirmed. Current seat index (actually same as player_interaction_vehi_seat once inside a vehicle)
+		obj_vehi_seat = read_word(object + 0x120) -- Confirmed. Current seat index (actually same as player_interaction_vehi_seat once inside a vehicle) ALSO NODE INDEX OF THE PARENT!!!
 		--	bitmask8:
 			obj_force_shield_update = read_bit(object + 0x122, 0) -- From OS.
 		--	unkBits[15] 1-15 (???)

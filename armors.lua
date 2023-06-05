@@ -485,7 +485,7 @@ function ConsoleMessages(i) --				These are the messages that will be displayed 
 		if get_var(i, "$has_chimera") == "1" then
 			rprint(i, "|cYou have Chimera!|nc9DFF09")
 		else
-			rprint(i, "|cYou don't have Chimera! Please download Chimera -581 from Discord!|ncFF4B09")
+			rprint(i, "|cYou don't have Chimera! Please download Chimera from Discord!|ncFF4B09")
 		end
 		rprint(i, " ")
 		rprint(i, " ")
