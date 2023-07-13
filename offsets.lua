@@ -45,7 +45,7 @@ function OnScriptLoad(process, Game, persistent)
 	navpoint_conversion_to_meters = read_float(0x6128E0)
 	navpoint_x_offset = read_float(0x6128EC)
 	navpoint_y_offset = read_float(0x6128F0)
-	near_clip_plane = read_float(0x61226C)
+	near_clip_plane = read_float(0x61226C) -- 0.0625
 	node_rotation_multiplier = read_float(0x6122AC) -- affects all nodes in a weird way
 	screen_height = read_word(0x637CF0)
 	screen_width = read_word(0x637CF2)
@@ -113,7 +113,7 @@ function OnScriptLoad(process, Game, persistent)
 		local weapon_object = read_dword(hud_address+208) -- current weapon ID (applies to vehicle weapons too!)
 		local grenade_timer = read_dword(hud_address+212) -- sometimes changes when throwing a grenade
 		local reticle_is_red = read_dword(hud_address+216) -- turns to 1 when reticle is red
-		local zoom_level = read_dword(hud_address+220) -- for HUD only. Forcing values above 0 will show scope mask even when unzoomed
+		local zoom_level = read_dword(hud_address+220) -- for HUD only. Zoom level that is shown on the hud
 		-- 224 - unknown
 		local should_reload_warning = read_dword(hud_address+228) -- time when weapon shows "should reload" warning
 		-- 232 - 236 - unknown
