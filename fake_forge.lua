@@ -9,7 +9,7 @@ api_version = "1.12.0.0"
 --CONFIG
 	
 	map_name = "bigass_"
-	bigass_default_map_name = "bigass_mod76" -- use latest bigass beta for now
+	bigass_default_map_name = "bigass_mod77" -- use latest bigass beta for now
 	
 	debug_mode = true	-- when enabled, players won't be forced to respawn when script is loaded
 	
@@ -27,6 +27,7 @@ api_version = "1.12.0.0"
 	SCENERY_NOT_TO_REMOVE = {
 		["altis\\scenery\\ffs\\i hate all of you"] = true,
 		["altis\\scenery\\fuck_this_shit\\i hate bigass"] = true,
+		["altis\\scenery\\\bigass_base_stuff\\\bigass_base_stuff"] = true,
 	}
 	
 --END OF CONFIG
