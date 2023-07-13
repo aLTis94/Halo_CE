@@ -1,3 +1,4 @@
+-- Vehicle Health script by aLTis. Version 1.1.0
 -- Makes vehicles like Falcon destructible, shows their health on hud, plays a warning sound on low health (only if player has chimera)
 api_version = "1.12.0.0"
 
@@ -5,12 +6,13 @@ api_version = "1.12.0.0"
 	
 	--(WARNING!!! This feature requires damage_module.dll)
 	-- This will try to fix "died" message when player gets killed in a vehicle
-	--CURRENTLY BROKEN DON'T USE!!!
-	died_fix = false
+	died_fix = true
+	
+	vehicle_respawn_time = 30 -- seconds
+	vehicle_part_lifetime = 29 -- seconds
+	vehicle_explosion_delay = 20--66 -- ticks
 	
 	sound_timer = 27 --How often the warning sound plays (only for players with chimera)
-	vehicle_part_lifetime = 25 -- seconds
-	vehicle_explosion_delay = 30--66 -- ticks
 	
 	-- Vehicles and their destroyed variants
 	VEHICLE_TAGS = {
@@ -32,11 +34,16 @@ api_version = "1.12.0.0"
 	
 	script_room_x = -111
 	script_room_y = -192
-	script_room_z = -110
+	script_room_z = -108
 
--- END OF CONFIG
+-- END_OF_CONFIG
 
-if died_fix then
+VEHICLES = {}
+VEHICLE_TAG_IDS = {}
+DESTROYED_VEHICLE_PARTS_IDS = {}
+DESTROYED_VEHICLE_PARTS_OBJECTS = {}
+
+function GetDamageModule()
 	ffi = require("ffi")
 	ffi.cdef [[
 		void damage_object(float amount, uint32_t receiver, int8_t causer);
@@ -47,64 +54,28 @@ if died_fix then
 	damage_player = damage_module.damage_player
 end
 
-VEHICLES = {}
-VEHICLE_TAG_IDS = {}
-DESTROYED_VEHICLE_PARTS_IDS = {}
-DESTROYED_VEHICLE_PARTS_OBJECTS = {}
-
-function WriteLog(text)
-	if file_name ~= nil and tonumber(get_var(0, "$pn")) > 0 and savefile ~= nil then
-		savefile:write(text)
-	end
-end
-
-function ReduceLines()
-	if file_name == nil then return end
-	local max_lines = 300
-	
-	local fp = io.open( file_name, "r" )
-    if fp == nil then return nil end
- 
-    content = {}
-    i = 1;
-    for line in fp:lines() do
-	    content[#content+1] = line
-	i = i + 1
-    end
- 
-    fp:close()
-    fp = io.open( file_name, "w+" )
- 
-    for i = 1, #content do
-		if i > #content - max_lines then
-			fp:write( string.format( "%s\n", content[i] ) )
-		end
-    end
- 
-    fp:close()
-end
-
 function OnScriptLoad()
+	
 	object_table_ptr = sig_scan("8B0D????????8B513425FFFF00008D")
 	register_callback(cb["EVENT_TICK"],"OnTick")
 	register_callback(cb['EVENT_GAME_START'],"OnGameStart")
 	
 	Initialize()
+	if died_fix then
+		GetDamageModule()
+	end
 end
 
 function OnGameStart()
-	--WriteLog("\n")
-	--WriteLog("\n")
-	--WriteLog("\n")
-	--WriteLog("NEW GAME!\n")
-	--WriteLog("\n")
-	--WriteLog("\n")
-	--WriteLog("\n")
 	VEHICLES = {}
 	VEHICLE_TAG_IDS = {}
 	DESTROYED_VEHICLE_PARTS_IDS = {}
 	DESTROYED_VEHICLE_PARTS_OBJECTS = {}
 	Initialize()
+end
+
+function GetTime()
+	return tonumber(get_var(0, "$ticks"))
 end
 
 function OnObjectSpawn(PlayerIndex, MetaID, ParentID, ID)
@@ -113,45 +84,48 @@ function OnObjectSpawn(PlayerIndex, MetaID, ParentID, ID)
 		VEHICLES[ID].name = VEHICLE_TAG_IDS[MetaID]
 		VEHICLES[ID].destroyed = false
 		VEHICLES[ID].respawning = 0
-		--WriteLog("Spawned a vehicle with MetaID "..MetaID.."\n")
 	elseif DESTROYED_VEHICLE_PARTS_IDS[MetaID] ~= nil then
-		timer(vehicle_part_lifetime * 1000, "RemoveVehicle", ID)
-		DESTROYED_VEHICLE_PARTS_OBJECTS[ID] = true
-		--WriteLog("Destroyed part spawned with MetaID "..MetaID.."\n")
+		DESTROYED_VEHICLE_PARTS_OBJECTS[ID] = GetTime()
 	end
 end
 
 function RemoveVehicle(ID)
-	--WriteLog("Destroying a part...")
 	ID = tonumber(ID)
 	if get_object_memory(ID) ~= 0 then
 		destroy_object(ID)
 	end
 	DESTROYED_VEHICLE_PARTS_OBJECTS[ID] = nil
-	--WriteLog(" Success!\n")
 end
 
 function OnTick()
-	--ReduceLines()
-	--WriteLog("\n")
-	--WriteLog("New tick "..os.date("%H:%M:%S").."\n")
-	--WriteLog("\n")
-	--WriteLog(">OnTick Setting UI stuff..")
 	SetUIStuff()
-	--WriteLog(" Success!\n")
 	
+	local ticks = GetTime()
+	
+	--VEHICLE PARTS
+	for ID,spawn_time in pairs (DESTROYED_VEHICLE_PARTS_OBJECTS) do
+		local object = get_object_memory(ID)
+		if object then
+			local lifetime = (ticks - spawn_time)/30
+			if lifetime > vehicle_part_lifetime then
+				RemoveVehicle(ID)
+			end
+		else
+			DESTROYED_VEHICLE_PARTS_OBJECTS[ID] = nil
+		end
+	end
+	
+	--VEHICLES
 	for ID,info in pairs (VEHICLES) do 
 		if VEHICLES[ID].damage_timer ~= nil then
-			if VEHICLES[ID].damage_timer > 0 then
-				VEHICLES[ID].damage_timer = VEHICLES[ID].damage_timer - 1
-			else
+			if ticks - VEHICLES[ID].damage_timer > 400 then
 				VEHICLES[ID].damage_timer = nil
 				VEHICLES[ID].damager = nil
+				--rprint(1, "removed")
 			end
 		end
 		local object = get_object_memory(ID)
 		if object ~= 0 then
-			--WriteLog(">OnTick Veh "..GetName(object).."\n")
 			local x = read_float(object + 0x5C)
 			local y = read_float(object + 0x60)
 			local z = read_float(object + 0x64)
@@ -165,52 +139,45 @@ function OnTick()
 				VEHICLES[ID].respawning = VEHICLES[ID].respawning - 1
 			end
 			if info.destroyed == false then
-				--WriteLog(">OnTick Getting damager..")
+				--Getting damager
 				GetDamager(ID)
-				--WriteLog(" Success!\n")
 				if VEHICLES[ID].smoke ~= nil and get_object_memory(VEHICLES[ID].smoke) ~= 0 then
-					--WriteLog(">OnTick Destroying smoke effect..")
 					destroy_object(VEHICLES[ID].smoke)
-					--WriteLog(" Success!\n")
 				end
 				VEHICLES[ID].smoke = nil
 				local shields = read_float(object + 0xE4)
 				if shields < 0.4 then
 					if shields == 0 then
-						--WriteLog(">OnTick Calling KillPassengers\n")
 						KillPassengers(ID)
-
 					else
 						if VEHICLES[ID].smoke == nil then
 							--x = x + read_float(object + 0x5C0 + VEHICLE_TAGS[VEHICLES[ID].name][3]*0x34)
 							--y = y + read_float(object + 0x5C4 + VEHICLE_TAGS[VEHICLES[ID].name][3]*0x34)
 							--z = z + read_float(object + 0x5C8 + VEHICLE_TAGS[VEHICLES[ID].name][3]*0x34)
-							--WriteLog(">OnTick Spawning smoke effect...")
 							VEHICLES[ID].smoke = spawn_object("weap", smoke_tag, x, y, z)
-							--WriteLog(" Success!\n")
 						elseif get_object_memory(VEHICLES[ID].smoke) ~= 0 then
-							--WriteLog(">OnTick Destroying smoke effect2...")
 							destroy_object(VEHICLES[ID].smoke)
 							VEHICLES[ID].smoke = nil
-							--WriteLog(" Success!\n")
 						end
 					end
 				end
+				
+			--DESTROYED VEHICLES
 			elseif VEHICLES[ID].destroyed_vehicle ~= nil then
 				write_float(object + 0xE4, 1)
 				VEHICLES[ID].respawning = 5
-				if DistanceFormula(script_room_x, script_room_y, script_room_z, x, y, z) > 30 then
+				
+				local lifetime = (ticks - VEHICLES[ID].destroyed_time)/30
+				if lifetime > vehicle_respawn_time - 1 then
 					if get_object_memory(VEHICLES[ID].destroyed_vehicle) ~= 0 then
-						--WriteLog(">OnTick Removing destroyed vehicle...")
 						destroy_object(VEHICLES[ID].destroyed_vehicle)
-						--WriteLog(" Success!\n")
 					end
 					VEHICLES[ID].destroyed_vehicle = nil
 					VEHICLES[ID].destroyed = false
 				end
 			end
 		else
-			--WriteLog(">OnTick Vehicle is gone but not destroyed!\n")
+			--Vehicle is gone but not destroyed!
 			VEHICLES[ID] = nil
 		end
 	end
@@ -220,16 +187,20 @@ function GetDamager(ID)
 	local object = get_object_memory(ID)
 	if object == 0 then return end
 	
-	local dmg = read_dword(object + 0x40C)
-	if dmg ~= 0xFFFFFFFF then
-		for i=1,16 do
-			local m_player = get_player(i)
-			if m_player ~= 0 then
-				local player_id = read_dword(m_player + 0x34)
-				if dmg == player_id then
-					VEHICLES[ID].damager = i
-					VEHICLES[ID].damage_timer = 90
-					--rprint(1, "dmg!")
+	local damager = read_word(object + 0x43C+2)
+	if damager ~= 0xFFFF then
+		local ticks = GetTime()
+		local damage_time = read_dword(object + 0x430)
+		if ticks - damage_time < 1 then
+			for i=1,16 do
+				local m_player = get_player(i)
+				if m_player ~= 0 then
+					local player_id = read_word(m_player)
+					if damager == player_id then
+						VEHICLES[ID].damager = i
+						VEHICLES[ID].damage_timer = damage_time
+						break
+					end
 				end
 			end
 		end
@@ -237,7 +208,6 @@ function GetDamager(ID)
 end
 
 function DestroyVehicle(ID)
-	--WriteLog(">DestroyVehicle\n")
 	ID = tonumber(ID)
 	
 	if VEHICLES[ID].destroyed == true then return false end
@@ -248,19 +218,43 @@ function DestroyVehicle(ID)
 		return false
 	end
 	
+	-- make sure no players entered the vehicle as it's being DESTROYED
+	if CheckPassengers(ID) > 0 then
+		return true
+	end
+	
 	local x = read_float(object + 0x5C)
 	local y = read_float(object + 0x60)
 	local z = read_float(object + 0x64)
 	
+	--set respawn time
+	write_dword(object + 0x5AC, (GetTime() - (60 - vehicle_respawn_time)*30))
+	
+	VEHICLES[ID].destroyed_time = GetTime()
+	VEHICLES[ID].destroyed = true
+	MoveToScriptRoom(ID)
+	timer(1, "SpawnDeadVehicle", ID, x, y, z)
+	
+	return false
+end
+
+function SpawnDeadVehicle(ID, x, y, z)
+	ID = tonumber(ID)
+	x = tonumber(x)
+	y = tonumber(y)
+	z = tonumber(z)
+	
 	VEHICLES[ID].destroyed_vehicle = spawn_object("vehi", VEHICLE_TAGS[VEHICLES[ID].name][1], x, y, z)
+	
 	local destroyed_object = get_object_memory(VEHICLES[ID].destroyed_vehicle)
+	local object = get_object_memory(ID)
 	if destroyed_object ~= 0 then
-		write_float(destroyed_object + 0x5C, read_float(object + 0x5C))
-		write_float(destroyed_object + 0x60, read_float(object + 0x60))
-		write_float(destroyed_object + 0x64, read_float(object + 0x64))
+		write_float(destroyed_object + 0x5C, x)
+		write_float(destroyed_object + 0x60, y)
+		write_float(destroyed_object + 0x64, z)
 		write_float(destroyed_object + 0x68, read_float(object + 0x68))
 		write_float(destroyed_object + 0x6C, read_float(object + 0x6C))
-		write_float(destroyed_object + 0x70, read_float(object + 0x70) + 0.05)
+		write_float(destroyed_object + 0x70, read_float(object + 0x70) + 0.02)
 		write_float(destroyed_object + 0x74, read_float(object + 0x74))
 		write_float(destroyed_object + 0x78, read_float(object + 0x78))
 		write_float(destroyed_object + 0x7C, read_float(object + 0x7C))
@@ -268,10 +262,28 @@ function DestroyVehicle(ID)
 		write_float(destroyed_object + 0x84, read_float(object + 0x84))
 		write_float(destroyed_object + 0x88, read_float(object + 0x88))
 	end
-	
-	VEHICLES[ID].destroyed = true
-	--WriteLog(">DestroyVehicle Calling MoveToScriptRoom\n")
-	MoveToScriptRoom(ID)
+	return false
+end
+
+function CheckPassengers(ID)
+	local passengers = 0
+	for i = 1,16 do
+		local player = get_dynamic_player(i)
+		if player ~= 0 then
+			local vehicle = read_dword(player + 0x11C)
+			if vehicle == ID then
+				passengers = passengers + 1
+				if died_fix and VEHICLES[ID].damager ~= nil and damage_module ~= nil then
+					--Dealing damage to player
+					damage_player(10000, to_real_index(i), to_real_index(VEHICLES[ID].damager))
+					--say_all("player "..get_var(i, "$name").." was killed by "..get_var(VEHICLES[ID].damager, "$name"))
+				else
+					kill(i)
+				end
+			end
+		end
+	end
+	return passengers
 end
 
 function KillPassengers(ID)
@@ -281,33 +293,11 @@ function KillPassengers(ID)
 		return false
 	end
 	
-	--WriteLog(">KillPassengers Getting damager...")
-	GetDamager(ID)
-	--WriteLog(" Success!\n")
-	
-	local passengers = 0
-	for i = 1,16 do
-		local player = get_dynamic_player(i)
-		if player ~= 0 then
-			local vehicle = read_dword(player + 0x11C)
-			if vehicle == ID then
-				passengers = passengers + 1
-				if VEHICLES[ID].damager ~= nil then
-					--WriteLog(">KillPassengers Dealing damage to player "..i.."...")
-					damage_player(10000, i, VEHICLES[ID].damager)
-					--say_all("player "..get_var(i, "$name").." was killed by "..get_var(VEHICLES[ID].damager, "$name"))
-					--WriteLog(" Success!\n")
-				else
-					--WriteLog(">KillPassengers Killing player "..i.."...")
-					kill(i)
-					--WriteLog(" Success!\n")
-				end
-			end
-		end
+	if died_fix then
+		GetDamager(ID)
 	end
-	if passengers == 0 then
-		--DestroyVehicle(ID)
-		--WriteLog(">KillPassengers Calling DestroyVehicle timer\n")
+	
+	if CheckPassengers(ID) == 0 then
 		timer(vehicle_explosion_delay, "DestroyVehicle", ID)
 	end
 end
@@ -318,9 +308,6 @@ function Initialize()
 		unregister_callback(cb['EVENT_OBJECT_SPAWN'])
 		return false 
 	end
-	
-	--file_name = "sapp\\bigass_reports\\vehicle_health "..os.date("%d.%m.%Y at %H.%M")..".txt"
-	--savefile = io.open(file_name, "a")
 	
 	-- set up falcon parts effect
 	local tag_data = read_dword(vehicle_parts_effect + 0x14)
@@ -381,9 +368,9 @@ function Initialize()
 end
 
 function MoveToScriptRoom(ID)
-	--WriteLog(">MoveToScriptRoom moved!\n")
 	local object = get_object_memory(ID)
 	if object ~= 0 then
+		write_bit(object + 0x10, 5, 0)
 		write_float(object + 0x5C, script_room_x)
 		write_float(object + 0x60, script_room_y)
 		write_float(object + 0x64, script_room_z)
@@ -431,7 +418,6 @@ function PlaySound(i, sound)
 end
 
 function OnScriptUnload()
-	--WriteLog("UNLOADING THE SCRIPT!\n")
 	for ID,info in pairs (VEHICLES) do 
 		if info.destroyed == true then
 			if VEHICLES[ID].destroyed_vehicle ~= nil and get_object_memory(VEHICLES[ID].destroyed_vehicle) ~= 0 then
@@ -463,4 +449,8 @@ end
 
 function GetName(DynamicObject)--	Gets directory + name of the object
 	return read_string(read_dword(read_word(DynamicObject) * 32 + 0x40440038))
+end
+
+function OnError(Message)
+	say_all("Error! "..Message)
 end
