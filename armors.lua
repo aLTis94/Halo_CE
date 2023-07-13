@@ -308,17 +308,6 @@ local ball_name = "weapons\\ball\\ball"
 	
 -- End of Configuration
 
-if assasinations_enabled or vehicle_melee_enable then
-	ffi = require("ffi")
-	ffi.cdef [[
-		bool damage_object(float amount, uint32_t receiver, int8_t causer);
-		bool damage_player(float amount, uint8_t receiver, int8_t causer);
-	]]
-	damage_module = ffi.load("damage_module")
-	damage_object = damage_module.damage_object
-	damage_player = damage_module.damage_player
-end
-
 PLAYER_INPUT = {}--		used to check if a player released a key before pressing it again
 BIPED_IDS = {}
 CHOSEN_SKINS = {}
@@ -351,6 +340,19 @@ for i=1,16 do
 end
 game_ended = false
 translation = false
+
+function GetDamageModule()
+	if assasinations_enabled or vehicle_melee_enable then
+		ffi = require("ffi")
+		ffi.cdef [[
+			bool damage_object(float amount, uint32_t receiver, int8_t causer);
+			bool damage_player(float amount, uint8_t receiver, int8_t causer);
+		]]
+		damage_module = ffi.load("damage_module")
+		damage_object = damage_module.damage_object
+		damage_player = damage_module.damage_player
+	end
+end
 
 function OnScriptLoad()
 	object_table_ptr = sig_scan("8B0D????????8B513425FFFF00008D")
@@ -386,6 +388,8 @@ function OnScriptLoad()
 			end
 		end
 	end
+	
+	GetDamageModule()
 end
 
 function OnGameStart()
@@ -604,6 +608,12 @@ function SaveChoices(i)
 end
 
 function OnTick()
+	
+	if damage_module == nil and (assasinations_enabled or vehicle_melee_enable) then
+		cprint("DAMAGE_MODULE.DLL NOT FOUND!")
+		rprint(1, "DAMAGE_MODULE.DLL NOT FOUND!")
+	end
+	
 	Boundaries()
 	for i=1,16 do
 		GetCustomKeys(i)
@@ -1780,12 +1790,14 @@ function ExitAss(ID, causer)
 end
 
 function DamagePlayer(dmg, i, causer)
-	dmg = tonumber(dmg)
-	i = tonumber(i)
-	causer = tonumber(causer)
-	if player_alive(i) and player_present(causer) then
-		damage_player(dmg, to_real_index(i), to_real_index(causer))
-		--debug_damage_player(dmg, to_real_index(i), to_real_index(causer))
+	if damage_module ~= nil then
+		dmg = tonumber(dmg)
+		i = tonumber(i)
+		causer = tonumber(causer)
+		if player_alive(i) and player_present(causer) then
+			damage_player(dmg, to_real_index(i), to_real_index(causer))
+			--debug_damage_player(dmg, to_real_index(i), to_real_index(causer))
+		end
 	end
 end
 
