@@ -373,7 +373,11 @@ function OnScriptLoad()
 			rprint(i, "|ndo_you_have_chimera?")
 			
 			CHOOSING_ARMOR[i] = false
-			WANTS_TO_SWITCH[i] = 1
+			if BLACKLISTED_GAMETYPES[string.lower(get_var(0, "$mode"))] == nil then
+				WANTS_TO_SWITCH[i] = 1
+			else
+				WANTS_TO_SWITCH[i] = 0
+			end
 			BIPED_WANTED[i] = 0
 			CHOSEN_SKINS[i] = {}
 			CHOSEN_VISOR[i] = 0
@@ -543,6 +547,7 @@ function LoadChoices(i)
 	if savefile ~= nil then
 		CHOSEN_VISOR[i] = tonumber(savefile:read())
 		BIPED_WANTED[i] = tonumber(savefile:read())
+		CHOSEN_BIPEDS[i] = BIPED_NUMBER[BIPED_WANTED[i]]
 		for key,value in pairs (SKINS) do
 			CHOSEN_SKINS[i][key] = tonumber(savefile:read())
 		end
@@ -1054,6 +1059,8 @@ function OnPlayerJoin(i)--		Resets some values and calls SpawnRoom after a delay
 			if(choose_armor_on_join) then
 				WANTS_TO_SWITCH[i] = 2
 			end
+		else 
+			WANTS_TO_SWITCH[i] = 0
 		end
 		CHOSEN_BIPEDS[i] = nil
 		BIPED_WANTED[i] = 0
