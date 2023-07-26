@@ -9,7 +9,7 @@ api_version = "1.12.0.0"
 --CONFIG
 	
 	map_name = "bigass_"
-	bigass_default_map_name = "bigass_mod77" -- use latest bigass beta for now
+	bigass_default_map_name = "bigass_v3"
 	
 	debug_mode = true	-- when enabled, players won't be forced to respawn when script is loaded
 	
