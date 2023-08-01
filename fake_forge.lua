@@ -109,7 +109,6 @@ function EnableInitializationTimer()
 end
 
 function Initialize(forge_map)
-
 	object_table = read_dword(read_dword(object_table_ptr + 2))
 	
 	for id, info in pairs (SPAWNED_OBJECTS) do

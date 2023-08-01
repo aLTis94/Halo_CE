@@ -12,6 +12,7 @@ api_version = "1.12.0.0"
 		["tropical"] = true,
 		["autumn"] = true,
 		["forkball"] = true,
+		["vehicle_madness"] = true,
 	}
 	
 	map_name = "bigass_" -- this script only works on this map (can just be a part of the map name)
@@ -47,10 +48,6 @@ api_version = "1.12.0.0"
 --END_OF_CONFIG
 
 
-drones_active = false
-force_spawn_drones = false
-PLAYERS = {}
-TURRETS = {}
 stats_globals = nil
 game_count = 0
 start_timer = 0
@@ -75,6 +72,9 @@ function OnScriptLoad()
 	network_struct = read_dword(sig_scan("F3ABA1????????BA????????C740??????????E8????????668B0D") + 3)
 	
 	register_callback(cb['EVENT_GAME_START'],"OnGameStart")
+	register_callback(cb['EVENT_COMMAND'],"OnCommand")
+	register_callback(cb['EVENT_GAME_END'],"OnGameEnd")
+	register_callback(cb['EVENT_CHAT'],"OnChat")
 	
 	Initialize()
 end
@@ -116,26 +116,29 @@ function OnCommand(i,message,Environment,Password)
 end
 
 function Initialize()
-	if string.find(get_var(0, "$map"), map_name) and BLACKLISTED_GAMETYPES[string.lower(get_var(0, "$mode"))] == nil then
+	if string.find(get_var(0, "$map"), map_name) then
 		stats_globals = read_dword(sig_scan("33C0BF??????00F3AB881D") + 0x3)
-		register_callback(cb["EVENT_TICK"],"OnTick")
-		register_callback(cb['EVENT_GAME_END'],"OnGameEnd")
-		register_callback(cb['EVENT_CHAT'],"OnChat")
-		register_callback(cb['EVENT_COMMAND'],"OnCommand")
+		
+		PLAYERS = {}
+		TURRETS = {}
 		
 		for i=1,16 do
 			PLAYERS[i] = {}
 			PLAYERS[i]["MELEE_TIMER"] = 0
 		end
 		start_timer = 0
+		drones_active = false
 		force_spawn_drones = false
 		
 		GetTagData()
+		
+		if BLACKLISTED_GAMETYPES[string.lower(get_var(0, "$mode"))] == nil then
+			register_callback(cb["EVENT_TICK"],"OnTick")
+		else
+			unregister_callback(cb["EVENT_TICK"])
+		end
 	else
 		unregister_callback(cb["EVENT_TICK"])
-		unregister_callback(cb['EVENT_GAME_END'])
-		unregister_callback(cb['EVENT_CHAT'])
-		unregister_callback(cb['EVENT_COMMAND'])
 	end
 end
 
@@ -715,6 +718,7 @@ function RemoveAllDrones()
 		end
 		RemoveObject(ID)
 	end
+	TURRETS = {}
 	start_timer = 0
 end
 
