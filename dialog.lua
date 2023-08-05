@@ -146,7 +146,6 @@ function OnChat(i,command)
 	command = string.lower(command)
 	if string.find(command, "lol") or string.find(command, "jaja") or string.find(command, "haha") then
 		PlaySound(i, "laugh")
-		return false
 	end
 	return true
 end
@@ -360,7 +359,7 @@ end
 function OnDamage(i, causer, meta_id)
 	causer = tonumber(causer)
 	
-	if player_present(i) == false or player_present(causer) == false or get_var(j, "$has_chimera") == "0" then return end
+	if player_present(i) == false or player_present(causer) == false or get_var(i, "$has_chimera") == "0" then return end
 	
 	local tag = lookup_tag(meta_id)
 	if tag ~= 0 then
