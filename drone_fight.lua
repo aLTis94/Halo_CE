@@ -9,6 +9,7 @@ api_version = "1.12.0.0"
 	debug_mode = false -- prints debug info
 
 	BLACKLISTED_GAMETYPES = {
+		["survival"] = true,
 		["tropical"] = true,
 		["autumn"] = true,
 		["forkball"] = true,
