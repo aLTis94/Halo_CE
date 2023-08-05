@@ -213,32 +213,36 @@ function BalanceTeams()
 	
 	local RED_PLAYERS = {}
 	local BLUE_PLAYERS = {}
+	local red_count = 0
+	local blue_count = 0
 	for i=1,16 do
 		if player_present(i) then
 			local team = get_var(i, "$team")
 			if team == "red" then
 				RED_PLAYERS[i] = true
+				red_count = red_count + 1
 			else
 				BLUE_PLAYERS[i] = true
+				blue_count = blue_count + 1
 			end
 		end
 	end
 	
-	local difference = #RED_PLAYERS - #BLUE_PLAYERS
-	if difference > 1 then -- more reds
+	local difference = math.floor((red_count - blue_count)/2)
+	if difference > 0 then -- more reds
 		for i,j in pairs (RED_PLAYERS) do
-			difference = difference-1
 			if difference > 0 then
 				execute_command("st "..i.." blue")
 			end
+			difference = difference-1
 		end
 		say_all("Teams were balanced!")
-	elseif difference < -1 then -- more blues
+	elseif difference < 0 then -- more blues
 		for i,j in pairs (BLUE_PLAYERS) do
-			difference = difference+1
 			if difference < 0 then
 				execute_command("st "..i.." red")
 			end
+			difference = difference+1
 		end
 		say_all("Teams were balanced!")
 	end
