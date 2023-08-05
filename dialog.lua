@@ -82,6 +82,8 @@ function Initialize()
 		register_callback(cb['EVENT_JOIN'],"OnPlayerJoin")
 		register_callback(cb['EVENT_DAMAGE_APPLICATION'],"OnDamage")
 		register_callback(cb['EVENT_VEHICLE_ENTER'],"OnVehicleEnter")
+		register_callback(cb['EVENT_COMMAND'],"OnCommand")
+		register_callback(cb['EVENT_CHAT'],"OnChat")
 		
 		frag_id = read_dword(lookup_tag("proj", frag_name) + 0xC)
 		
@@ -106,6 +108,8 @@ function Initialize()
 		unregister_callback(cb['EVENT_JOIN'])
 		unregister_callback(cb['EVENT_DAMAGE_APPLICATION'])
 		unregister_callback(cb['EVENT_VEHICLE_ENTER'])
+		unregister_callback(cb['EVENT_COMMAND'])
+		unregister_callback(cb['EVENT_CHAT'])
 	end
 end
 
@@ -127,6 +131,24 @@ function PlaySound(i, sound)
 			end
 		end
 	end
+end
+
+function OnCommand(i,command)
+	command = string.lower(command)
+	if command == "l" then
+		PlaySound(i, "laugh")
+		return false
+	end
+	return true
+end
+
+function OnChat(i,command)
+	command = string.lower(command)
+	if string.find(command, "lol") or string.find(command, "jaja") or string.find(command, "haha") then
+		PlaySound(i, "laugh")
+		return false
+	end
+	return true
 end
 
 function OnPlayerJoin(i)
@@ -232,7 +254,7 @@ end
 
 function Woohoo()
 	for i=1,16 do
-		if player_present(i) and PLAYERS[i].dead == false and PLAYERS[i].vehicle ~= nil and PLAYERS[i].vehicle_seat ~= 0 and PLAYERS[i].vehicle_name ~= falcon_name then
+		if player_present(i) and get_var(i, "$has_chimera") == "1" and PLAYERS[i].dead == false and PLAYERS[i].vehicle ~= nil and PLAYERS[i].vehicle_seat ~= 0 and PLAYERS[i].vehicle_name ~= falcon_name then
 			if PLAYERS[i].vehicle_airborne == 40 and PLAYERS[i].vehicle_vel > 0.01 then
 				PlaySound(i, "chr_vcljmp")
 				break
@@ -244,7 +266,7 @@ end
 function VehicleCrash()
 	local crahs_sens = 50
 	for i=1,16 do
-		if PLAYERS[i].vehicle ~= nil and PLAYERS[i].vehicle_seat ~= 0 then
+		if PLAYERS[i].vehicle ~= nil and PLAYERS[i].vehicle_seat ~= 0 and get_var(i, "$has_chimera") == "1" then
 			for j=1,16 do
 				if i~=j and player_alive(j) and PLAYERS[j].vehicle ~= nil and PLAYERS[j].vehicle_seat == 0 then
 					if (math.abs(PLAYERS[i].vehicle_collision_x) > crahs_sens or math.abs(PLAYERS[i].vehicle_collision_x) > crahs_sens) then
@@ -262,7 +284,7 @@ function GrenadeThrow()
 	if get_var(0, "$ffa") == "1" then return end
 	
 	for i=1,16 do
-		if player_alive(i) then
+		if player_alive(i) and get_var(i, "$has_chimera") == "1" then
 			local child_obj = get_object_memory(read_dword(PLAYERS[i].object + 0x118))
 			if child_obj ~= 0 and read_word(child_obj + 0xB4) == 5 then
 				if read_dword(child_obj) == frag_id then
@@ -276,6 +298,9 @@ end
 
 function OnVehicleEnter(i)
 	-- should probably check if there are any allies/players around before doing this
+	if get_var(i, "$has_chimera") == "0" then return false end
+	
+	
 	PLAYERS[i].vehicle_id = read_dword(PLAYERS[i].object + 0x11C)
 	PLAYERS[i].vehicle = get_object_memory(PLAYERS[i].vehicle_id)
 	if PLAYERS[i].vehicle ~= 0 then
@@ -335,7 +360,7 @@ end
 function OnDamage(i, causer, meta_id)
 	causer = tonumber(causer)
 	
-	if player_present(i) == false or player_present(causer) == false then return end
+	if player_present(i) == false or player_present(causer) == false or get_var(j, "$has_chimera") == "0" then return end
 	
 	local tag = lookup_tag(meta_id)
 	if tag ~= 0 then
@@ -364,7 +389,7 @@ end
 
 function CheckGun(i)
 	i = tonumber(i)
-	if PLAYERS ~= nil and PLAYERS[i] ~= nil then
+	if PLAYERS ~= nil and PLAYERS[i] ~= nil and get_var(i, "$has_chimera") == "1" then
 		--say_all(PLAYERS[i].weapon_name)
 		if PLAYERS[i].weapon ~= nil and PLAYERS[i].weapon_name ~= flag_name and PLAYERS[i].weapon_name ~= ball_name and PLAYERS[i].weapon_name ~= sprint_name and PLAYERS[i].weapon_name ~= sprint_female_name then
 			local unloaded_ammo = read_word(PLAYERS[i].weapon + 0x2B6)
