@@ -21,9 +21,8 @@ human_score_per_second = 1
 zombie_score_per_second = 0.2
 
 -- Other
-last_camo_time = 15
+min_number_for_nav = 4
 last_is_next_zombie = true
-disable_vehicles = true
 
 -- Kill messages
 infect_msg = "infected"
@@ -35,15 +34,14 @@ human_again_msg = "has become human again for killing %s humans!"
 game_over_msg = "All humans have been infected!!! The game will now end..."
 no_more_zombies_msg = "There are no more zombies!"
 no_zombies_countdown_msg = "A random player will become a zombie in"
-lastman_msg = "is the last person alive, find them and eat their brains!!!"
+lastman_msg = "is the last person alive, find them and eat infect them!!!"
 
 -- Required
 api_version = "1.10.0.0"
 svcmd = execute_command_sequence
-score, player_weapon_id = {}, {}
+score = {}
 h_count, z_count, count = 0, 0, 0
 nozomz,last_name = false, nil
-msg = nil
 
 function OnScriptLoad()
 	register_callback(cb['EVENT_GAME_START'], "OnGameStart")
@@ -53,6 +51,9 @@ end
 function Initialize()
 	local gametype = string.lower(get_var(0, "$mode"))
 	if gametype == flood_gametype then
+		
+		game_was_started = true
+		
 		gameinfo_header = read_dword(sig_scan("A1????????8B480C894D00") + 0x1)
 		register_callback(cb['EVENT_GAME_END'], "OnGameEnd")
 		register_callback(cb['EVENT_JOIN'], "OnPlayerJoin")
@@ -60,31 +61,53 @@ function Initialize()
 		register_callback(cb['EVENT_DIE'], "OnPlayerDeath")
 		register_callback(cb['EVENT_TICK'], "OnEventTick")
 		server_setup()
+		
+		svcmd("object_destroy check_vehicle")
+		svcmd("set is_host true")
+		svcmd("set tod 1")
+		
+		--svcmd("set debug_mode 1")
 		return true
-	else
+	elseif game_was_started then
+		
+		game_was_started = nil
+		
+		timer(3500, "BalanceTeams")
+		
 		unregister_callback(cb['EVENT_GAME_END'])
 		unregister_callback(cb['EVENT_JOIN'])
 		unregister_callback(cb['EVENT_LEAVE'])
 		unregister_callback(cb['EVENT_DIE'])
 		unregister_callback(cb['EVENT_TICK'])
+		svcmd("block_tc disabled")
 		return false
 	end
 end
 
 function OnScriptUnload()
-	for i = 1,#player_weapon_id do
-		destroy_object(player_weapon_id[i])
-	end
+	svcmd("block_tc disabled")
+end
+
+function SpawnVehicles()
+	svcmd("object_create_anew truck")
+	svcmd("object_create_anew truck2")
+	--svcmd("object_create_anew newhog")
+	--svcmd("object_create_anew newhog2")
+	--svcmd("object_create_anew newhog3")
+	--svcmd("object_create_anew newhog4")
+	--svcmd("object_create_anew spade")
+	svcmd("object_create_anew hay1")
+	svcmd("object_create_anew hay2")
+	svcmd("object_create_anew hay3")
+	svcmd("object_create_anew hay4")
+	svcmd("object_create_anew hay5")
+	svcmd("object_create_anew hay6")
+	svcmd("object_create_anew hay7")
+	svcmd("object_create_anew forklift")
 end
 
 function OnGameStart()
-	if Initialize() then
-		gameinfo_base = read_dword(gameinfo_header)
-		game_active, last, join_call = false, false, false
-		for i = 1,16 do
-			score[i], player_weapon_id[i] = 0, nil
-		end
-	end
+	Initialize()
 end
 
 function OnGameEnd()
@@ -104,7 +127,6 @@ function OnPlayerJoin(PlayerIndex)
 			say(PlayerIndex, "Please wait for more players to join.")
 		end
 	else
-		set_navs()
 		if players > 1 then
 			set_team(PlayerIndex, zombie_team, false)
 			timer(100, "check_game_state")
@@ -158,18 +180,51 @@ function OnPlayerDeath(VictimIndex, KillerIndex)
 end
 
 function OnEventTick()
-	for i = 0,16 do
+	get_counts()
+	set_human_navs()
+	
+	nav_set = false
+	
+	for i = 1,16 do
 		if player_present(i) then
 			if player_alive(i) and game_active then
 				local zero = math.fmod(read_dword(gameinfo_base + 0xC), 15)
-				local crouch, team = read_byte(get_dynamic_player(i) + 0x2A0), get_team(i)
-				if team == zombie_team then if crouch == 3 then camo(i, 1) end end -- Crouch camo for zombies
+				local team = get_team(i)
 				if zero == 0 then set_player_score(0, i, team) end
+				
+				if nav_set == false and team == human_team and h_count <= min_number_for_nav and z_count >= 1 then
+					set_zombie_navs(i)
+					nav_set = true
+				end
 			end
-			if msg ~= nil then
-				for x = 0,10 do rprint(i, " ") end
-				rprint(i, "|c"..msg)
-				for x = 0,12 do rprint(i, " ") end
+		end
+	end
+end
+
+function set_zombie_navs(PlayerIndex)
+	for i = 1,16 do
+		if player_present(i) and get_team(i) == zombie_team then
+			local m_player = get_player(i)
+			local player = to_real_index(i)
+			if m_player ~= 0 then
+				if PlayerIndex ~= nil then
+					write_word(m_player + 0x88, to_real_index(PlayerIndex))
+				else
+					write_word(m_player + 0x88, player)
+				end
+			end
+		end
+	end
+end
+
+function set_human_navs()
+	for i = 1,16 do
+		if player_present(i) and get_team(i) == human_team then
+			local m_player = get_player(i)
+			local player = to_real_index(i)
+			if m_player ~= 0 then
+				write_word(m_player + 0x88, player)
+				--say_all("setting "..i)
 			end
 		end
 	end
@@ -178,7 +233,9 @@ end
 function start_game_timer()
 	local allow_return, present = true, false
 	count = count + 1
-	msg = "The game will start in " .. 6 - count
+	if count < 6 then
+		say_all("The game will start in " .. 6 - count)
+	end
 	if count >= 6 then
 		if last_is_next_zombie then
 			if last_name ~= nil then
@@ -198,15 +255,17 @@ function start_game_timer()
 		end
 		count, allow_return = 0, false
 		svcmd("sv_map_reset")
-		msg = "The game has started!"
+		say_all("The game has started!")
 		timer(50, "activate")
-		timer(1500, "remove_msg")
 	end
 	return allow_return
 end
 
-function activate() set_navs() check_game_state() game_active = true end -- Set naves above players own heads.
-function remove_msg() msg = nil end
+function activate() 
+	game_active = true 
+	check_game_state() 
+	SpawnVehicles()
+end
 
 function get_random_player(NewTeam, ForceKill)
 	local players, Count = {}, 0
@@ -262,9 +321,7 @@ function on_last_man() -- There is only one human, lets give him the tools to co
 		if player_present(i) then
 			if get_team(i) == human_team and get_var(i,"$name") ~= last_name then
 				last_name = get_var(i,"$name")
-				camo(i, last_camo_time)
 				say_all(last_name .. " " .. lastman_msg)
-				set_navs(i)
 				break
 			end
 		end
@@ -319,6 +376,78 @@ function set_spawn_time(PlayerIndex)
 	end
 end
 
+function BalanceTeams()
+	if get_var(0, "$ffa") == 1 then return end
+	
+	local RED_PLAYERS = {}
+	local BLUE_PLAYERS = {}
+	local red_count = 0
+	local blue_count = 0
+	for i=1,16 do
+		if player_present(i) then
+			local team = get_var(i, "$team")
+			if team == "red" then
+				RED_PLAYERS[i] = true
+				red_count = red_count + 1
+			else
+				BLUE_PLAYERS[i] = true
+				blue_count = blue_count + 1
+			end
+		end
+	end
+	
+	local difference = math.floor((red_count - blue_count)/2)
+	if difference > 0 then -- more reds
+		for i,j in pairs (RED_PLAYERS) do
+			if difference > 0 then
+				execute_command("st "..i.." blue")
+			end
+			difference = difference-1
+		end
+		say_all("Teams were balanced!")
+	elseif difference < 0 then -- more blues
+		for i,j in pairs (BLUE_PLAYERS) do
+			if difference < 0 then
+				execute_command("st "..i.." red")
+			end
+			difference = difference+1
+		end
+		say_all("Teams were balanced!")
+	end
+end
+
+function FixTags()
+	local tag = lookup_tag("jpt!", "characters\\floodcombat_human\\player\\projectile\\destroyed")
+	if tag then
+		tag = read_dword(tag + 0x14)
+		write_float(tag + 0x1CC, 0.5) -- aoe
+		write_float(tag + 0x1DC, -1) -- veh passthrough penalty
+		write_float(tag + 0x214, 1)
+		write_float(tag + 0x218, 1)
+		write_float(tag + 0x21C, 1)
+	end
+	
+	local tag = lookup_tag("jpt!", "characters\\floodcombat_human\\player\\projectile\\attach")
+	if tag then
+		tag = read_dword(tag + 0x14)
+		write_float(tag + 0x1DC, -99) -- veh passthrough penalty
+		write_float(tag + 0x214, 100)
+		write_float(tag + 0x218, 100)
+		write_float(tag + 0x21C, 100)
+	end
+	
+	--tag = lookup_tag("proj", "characters\\floodcombat_human\\player\\projectile\\projectile")
+	--if tag then
+	--	tag = read_dword(tag + 0x14)
+	--	local materials_address = read_dword(tag + 0x244)
+	--	for i=5,7 do
+	--		local struct = materials_address + i*160
+	--		write_word(struct + 0x24, 1)
+	--		write_bit(struct + 0x26, 7, 1)
+	--	end
+	--end
+end
+
 function GetTag(class,path) -- Thanks to 002
     local tagarray = read_dword(0x40440000)
     for i=0,read_word(0x4044000C)-1 do
@@ -349,13 +478,6 @@ function set_team(PlayerIndex, NewTeam, ForceKill)
 	end
 end
 
-function set_speed(PlayerIndex, Speed)
-	local m_player = get_player(PlayerIndex)
-	if m_player then
-		write_float(m_player + 0x6c, Speed)
-	end
-end
-
 function get_tag(PlayerIndex)
 	local m_object = get_dynamic_player(PlayerIndex)
 	if m_object ~= 0 then
@@ -371,25 +493,22 @@ end
 
 function set_navs(PlayerIndex)
 	for i = 1,16 do
-		if player_present(i) then
-			local m_player = get_player(i)
-			local player = to_real_index(i)
-			if m_player ~= 0 then
-				if PlayerIndex ~= nil then
-					write_word(m_player + 0x88, to_real_index(PlayerIndex))
-				else
-					write_word(m_player + 0x88, player)
-				end
-			end
+		if player_present(i) and get_team(i) == zombie_team and get_var(i, "$has_chimera") == "1" then
+			local player = get_dynamic_player(PlayerIndex)
+			local x, y, z = read_vector3d(player + 0x78C + 0x28)
+			rprint(i, "nav~default_red~"..x.."~"..y.."~"..z+0.8 .."~"..zombie_team)
 		end
 	end
 end
 
 function server_setup()
+	FixTags()
+	game_active, last, join_call = false, false, false
+	for i = 1,16 do
+		score[i] = 0
+	end
 	gameinfo_base = read_dword(gameinfo_header)
 	join_call, last_name, nozomz = false, nil, false
-	local disable_team = zombie_team + 1
-	svcmd("disable_all_objects  "..disable_team)
 	for i = 1,16 do
 		if player_present(i) then
 			set_team(i, human_team, false)
@@ -398,6 +517,9 @@ function server_setup()
 	if tonumber(get_var(0, "$pn")) > 1 then
 		timer(1000, "start_game_timer")
 	end
-	if disable_vehicles then svcmd("disable_all_vehicles 0 1") end
-	svcmd("block_tc enabled;disable_object 'weapons\\ball\\ball' 0;disable_object 'weapons\\flag\\flag' 0")
+	svcmd("block_tc enabled")
+end
+
+function OnError(Message)
+	say_all("Error!"..Message)
 end
