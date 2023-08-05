@@ -27,6 +27,7 @@ function OnGameStart()
 	elseif get_var(0, "$mode") == "team_king_snow" then
 		timer(0, "SetTOD", 2)
 	elseif get_var(0, "$mode") == "vehicle_madness" then
+		timer(0, "SetTOD", 2)
 		timer(0, "VehicleMandess")
 	end
 end
