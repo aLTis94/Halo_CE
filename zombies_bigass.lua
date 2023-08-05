@@ -192,7 +192,7 @@ function OnEventTick()
 				local team = get_team(i)
 				if zero == 0 then set_player_score(0, i, team) end
 				
-				if nav_set == false and team == human_team and h_count <= min_number_for_nav and z_count >= 1 then
+				if nav_set == false and team == human_team then --and h_count <= min_number_for_nav
 					set_zombie_navs(i)
 					nav_set = true
 				end
