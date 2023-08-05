@@ -31,7 +31,7 @@
 	
 	flood_biped = "characters\\floodcombat_human\\player\\flood player"
 	
-	flood_speed = 1.59 -- Set speed for flood biped
+	flood_speed = 1.9 -- Set speed for flood biped
 	normal_speed = 1.0 -- Set the base walking speed
 	sprint_increase = 0.5 -- Set the sprinting speed increase
 	minimum_energy = 20 -- Player cannot start sprinting if less than this percentage of energy
