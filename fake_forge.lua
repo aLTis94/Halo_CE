@@ -60,14 +60,6 @@ koth_globals = 0x5BDBD0
 function OnScriptLoad()
 	game_is_running = false
 	
-	--chimera detection
-	add_var("has_chimera", 4)
-	for i=1,16 do
-		rprint(i, "|nforgereloaded")
-		set_var(i, "$has_chimera", 0)
-		rprint(i, "|ngot_chimera?")
-	end
-	
 	local timer_seconds_address_sig = sig_scan("C3D905????????D864240CD915????????D81D")
     if(timer_seconds_address_sig == 0) then return end
 
@@ -144,6 +136,14 @@ function Initialize(forge_map)
 	else
 		prefix = prefix_default
 		file_path = "sapp\\"..current_map.."_forge\\"
+		
+		--chimera detection
+		add_var("has_chimera", 4)
+		for i=1,16 do
+			rprint(i, "|nforgereloaded")
+			set_var(i, "$has_chimera", 0)
+			rprint(i, "|ngot_chimera?")
+		end
 	end
 	
 	fake_forge_enabled = false
@@ -852,10 +852,13 @@ function SpawnVehicle(tag_path, x, y, z, rot)
 end
 
 function OnPlayerJoin(i)
-	set_var(i, "$has_chimera", 0)
-	rprint(i, "|ngot_chimera?")
+	if bigass_v3 == false then
+		set_var(i, "$has_chimera", 0)
+		rprint(i, "|ngot_chimera?")
+		timer(33, "CheckChimera", i, 200)
+	end
 	timer(object_spawn_delay, "SendObjectInfo", i, 0, 100)
-	timer(33, "CheckChimera", i, 200)
+	
 	--timer(2000, "SendMapName", i)
 end
 
