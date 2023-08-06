@@ -2185,7 +2185,14 @@ function CheckChimera(PlayerIndex)
 		say(PlayerIndex, "You don't have Chimera installed")
 		say(PlayerIndex, "Get Chimera and the Lua script for extra features!")
 		rprint(PlayerIndex, "|ndo_you_have_chimera?")
+		timer(4000, "SpanishMSGs", PlayerIndex)
 	end
+end
+
+function SpanishMSGs(i)
+	i = tonumber(i)
+	say(i, "Al parecer no tienes Chimera instalado")
+	say(i, "Descarga Chimera para más funciones!")
 end
 
 function GetYaw(yaw, pitch)
