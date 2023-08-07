@@ -1,4 +1,4 @@
--- Zombies by: Skylace aka Devieth
+-- Zombies by: Skylace aka Devieth, edited by aLTis for BigassV3
 -- Version 4.0 for Sapp 10+
 -- Website: http://pastebin.com/u/it300
 
@@ -51,7 +51,6 @@ end
 function Initialize()
 	local gametype = string.lower(get_var(0, "$mode"))
 	if gametype == flood_gametype then
-		
 		game_was_started = true
 		
 		gameinfo_header = read_dword(sig_scan("A1????????8B480C894D00") + 0x1)
@@ -60,6 +59,7 @@ function Initialize()
 		register_callback(cb['EVENT_LEAVE'], "OnPlayerLeave")
 		register_callback(cb['EVENT_DIE'], "OnPlayerDeath")
 		register_callback(cb['EVENT_TICK'], "OnEventTick")
+		register_callback(cb['EVENT_OBJECT_SPAWN'],"OnObjectSpawn")
 		server_setup()
 		
 		svcmd("object_destroy check_vehicle")
@@ -79,6 +79,7 @@ function Initialize()
 		unregister_callback(cb['EVENT_LEAVE'])
 		unregister_callback(cb['EVENT_DIE'])
 		unregister_callback(cb['EVENT_TICK'])
+		unregister_callback(cb['EVENT_OBJECT_SPAWN'])
 		svcmd("block_tc disabled")
 		return false
 	end
@@ -86,6 +87,12 @@ end
 
 function OnScriptUnload()
 	svcmd("block_tc disabled")
+end
+
+function OnObjectSpawn(i, MetaID, ParentID, ObjectID)
+	if MetaID == dmr then
+		return false
+	end
 end
 
 function SpawnVehicles()
@@ -518,6 +525,8 @@ function server_setup()
 		timer(1000, "start_game_timer")
 	end
 	svcmd("block_tc enabled")
+	
+	dmr = read_dword(lookup_tag("weap", "bourrin\\weapons\\dmr\\dmr") + 0xC)
 end
 
 function OnError(Message)
