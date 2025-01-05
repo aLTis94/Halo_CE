@@ -29,7 +29,7 @@ api_version = "1.12.0.0"
 	auto_turret_lead = 1			-- how much to lead the shots based on target's velocity
 	auto_turret_weapon_error = 0.0003	-- accuracy. lower = more accurate
 	auto_turret_rate_of_fire = 5	-- how fast it fires. lower = faster (in ticks)
-	turret_health_cutoff = 0.99	-- how much health it has. higher value means less
+	turret_health_cutoff = 0.994	-- how much health it has. higher value means less
 	
 	auto_turret_weapon = "ai\\turret\\weapons\\turret\\turret"
 	auto_turret_projectile = "ai\\turret\\weapons\\turret\\bullet"
@@ -43,9 +43,9 @@ api_version = "1.12.0.0"
 	map_boundary_z_min = 2
 	map_boundary_z_max = 10
 	
-	max_drone_count = 18
+	max_drone_count = 8
 	
-	max_player_count = 3
+	max_player_count = 2
 --END_OF_CONFIG
 
 
