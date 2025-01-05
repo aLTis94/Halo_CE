@@ -299,6 +299,7 @@ function OnVehicleEnter(i)
 	-- should probably check if there are any allies/players around before doing this
 	if get_var(i, "$has_chimera") == "0" then return false end
 	
+	if PLAYERS[i].object == nil then return false end
 	
 	PLAYERS[i].vehicle_id = read_dword(PLAYERS[i].object + 0x11C)
 	PLAYERS[i].vehicle = get_object_memory(PLAYERS[i].vehicle_id)
