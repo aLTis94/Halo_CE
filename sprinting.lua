@@ -311,6 +311,7 @@ function GetGametype()-- returns 0 if race or oddball, 1 otherwise. Sprint doesn
 end
 
 function OnGameStart()--	Checks if gametype and map supports sprinting
+	DisableSprinting()
 	sprinting_disabled = false
 	if GetGametype() and CheckMap() then
 	

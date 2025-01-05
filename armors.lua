@@ -397,6 +397,9 @@ function OnScriptLoad()
 end
 
 function OnGameStart()
+	for i=1,16 do
+		execute_command("block_all_objects "..i.." 0")
+	end
     game_ended = false
 	if lookup_tag("vehi", armor_room_vehicle) ~= 0 then
 		execute_command("object_create check_vehicle")
