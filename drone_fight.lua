@@ -27,12 +27,22 @@ auto_turret_vel_factor = 0.04    -- how fast it moves
 auto_turret_max_vel = 0.1
 shooting_distance = 20
 auto_turret_max_distance = 50
-auto_turret_keep_radius = 6       -- drones stop approaching at this distance from their target and back away if the target gets closer
+auto_turret_keep_radius = 4.5       -- drones stop approaching at this distance from their target and back away if the target gets closer
 auto_turret_retreat_boost = 2.5   -- how much faster than normal drones back away when inside the radius
+auto_turret_flee_health = 0.994   -- drones run away below this health. must be above turret_health_cutoff (they die below that)
+auto_turret_repair_rate = 0.00002 -- health a fleeing drone repairs each tick (0.00002 = about 5 seconds per 0.003)
+auto_turret_recover_health = 0.9995 -- a drone that fled keeps fleeing until it has repaired to this
+auto_turret_kamikaze_chance = 0.07   -- chance a new drone is a kamikaze: it charges its target without firing and blows up on them
+auto_turret_kamikaze_speed = 2.2     -- kamikaze drones move this many times faster than normal
+auto_turret_kamikaze_distance = 1    -- how close a kamikaze gets before it blows up
+auto_turret_kamikaze_projectile = "bourrin\\halo reach\\vehicles\\warthog\\rocket\\rocket"  -- projectile spawned on the target to make the explosion
+auto_turret_flee_distance = 35  -- a fleeing drone keeps running until its target is this far away
+auto_turret_flee_turn_rate = 4    -- degrees per tick a fleeing drone turns toward the direction it's running (4 = about 1.5 seconds to turn all the way around)
+auto_turret_flee_time = 8 * 30   -- ticks a fleeing drone keeps running after it loses sight of what it's running from
 auto_turret_acceleration = 0.004
 auto_turret_lead = 0.9            -- how much to lead the shots based on target's velocity
 auto_turret_weapon_error = 0.0008 		-- accuracy. lower = more accurate
-auto_turret_rate_of_fire = 4       -- how fast it fires. lower = faster (in ticks)
+auto_turret_rate_of_fire = 6       -- how fast it fires. lower = faster (in ticks)
 auto_turret_shots_per_burst = 2    -- projectiles fired each time the drone shoots
 turret_health_cutoff = 0.992       -- how much health it has. higher value means less
 
@@ -48,9 +58,9 @@ map_boundary_y_max = 95
 map_boundary_z_min = 2
 map_boundary_z_max = 10
 
-max_drone_count = 15
+max_drone_count = 12
 
-max_player_count = 2
+max_player_count = 4
 --END_OF_CONFIG
 
 
@@ -150,6 +160,8 @@ end
 
 function GetTagData()
 	auto_turret_projectile_tag = GetMetaID("proj", auto_turret_projectile)
+	-- no kamikazes if the map doesn't have the explosion
+	auto_turret_kamikaze_tag = GetMetaID("proj", auto_turret_kamikaze_projectile)
 
 	local scenario_metaid = read_dword(0x40440004)
 	local scenario_tag = lookup_tag(scenario_metaid)
@@ -439,12 +451,58 @@ function DroneAI()
 			INFO.r_x = rot_x
 			INFO.r_y = rot_y
 			INFO.r_z = rot_z
-			if (x2 == 0 and INFO.nav_x == nil) == false then
-				--rprint(1, rot_x.."  "..rot_y.."  "..rot_z)
-				--rprint(1, math.abs(rot_x)+math.abs(rot_y)+math.abs(rot_z))
-				--rprint(1, closest_distance)
-				write_vector3d(object + 0x74, rot_x, rot_y, rot_z)
+
+			--FLEEING
+			-- a damaged drone runs from its target and keeps running for a while after losing sight of it
+			local fleeing = false
+			-- once hurt, a drone keeps fleeing until it has repaired well past the flee threshold
+			if turret_health < auto_turret_flee_health then
+				INFO.recovering = true
+			elseif turret_health >= auto_turret_recover_health then
+				INFO.recovering = false
+			end
+			if INFO.recovering and not INFO.kamikaze then
+				if closest_object ~= nil and closest_distance < auto_turret_flee_distance then
+					fleeing = true
+					INFO.flee_timer = auto_turret_flee_time
+					INFO.flee_x, INFO.flee_y, INFO.flee_z = -rot_x, -rot_y, -rot_z
+				elseif INFO.flee_timer ~= nil and INFO.flee_timer > 0 then
+					fleeing = true
+					INFO.flee_timer = INFO.flee_timer - 1
+				end
+			end
+
+			if fleeing then
+				-- slowly repair while running
+				turret_health = turret_health + auto_turret_repair_rate
+				if turret_health > 1 then
+					turret_health = 1
+				end
+				write_float(object + 0xE4, turret_health)
+
+				-- turn around gradually instead of snapping to face away
+				if INFO.face_x == nil then
+					INFO.face_x, INFO.face_y, INFO.face_z = read_vector3d(object + 0x74)
+				end
+				INFO.face_x, INFO.face_y, INFO.face_z = TurnToward(INFO.face_x, INFO.face_y, INFO.face_z,
+					INFO.flee_x, INFO.flee_y, INFO.flee_z, math.rad(auto_turret_flee_turn_rate))
+				write_vector3d(object + 0x74, INFO.face_x, INFO.face_y, INFO.face_z)
 				write_vector3d(object + 0x80, 0, 0, 1)
+			else
+				INFO.face_x = nil
+				if (x2 == 0 and INFO.nav_x == nil) == false then
+					--rprint(1, rot_x.."  "..rot_y.."  "..rot_z)
+					--rprint(1, math.abs(rot_x)+math.abs(rot_y)+math.abs(rot_z))
+					--rprint(1, closest_distance)
+					write_vector3d(object + 0x74, rot_x, rot_y, rot_z)
+					write_vector3d(object + 0x80, 0, 0, 1)
+				end
+			end
+
+			--KAMIKAZE
+			if INFO.kamikaze and closest_object ~= nil and closest_distance < auto_turret_kamikaze_distance then
+				DetonateDrone(ID, INFO, closest_object, rot_x, rot_y, rot_z)
+				goto drone_end
 			end
 
 			--SHOOTING
@@ -456,7 +514,7 @@ function DroneAI()
 					local target_veh_id = closest_object ~= nil and read_dword(closest_object + 0x11C) or 0xFFFFFFFF
 					local in_veh = target_veh_id ~= 0xFFFFFFFF and get_object_memory(target_veh_id) ~= 0
 					local aim_tolerance = in_veh and 5.5 or 2.5
-					if closest_distance < shooting_distance and (distance_to_aim_location < aim_tolerance or (in_veh and hit_id == target_veh_id)) then
+					if not fleeing and not INFO.kamikaze and closest_distance < shooting_distance and (distance_to_aim_location < aim_tolerance or (in_veh and hit_id == target_veh_id)) then
 						for _ = 1, auto_turret_shots_per_burst do
 							local x_error = -rand(1, 100) * auto_turret_weapon_error + auto_turret_weapon_error * 50
 							local y_error = -rand(1, 100) * auto_turret_weapon_error + auto_turret_weapon_error * 50
@@ -525,15 +583,44 @@ function DroneAI()
 
 			--MOVING
 			-- keep a radius around the target: back away if it's inside the radius
-			local retreating = closest_object ~= nil and closest_distance < auto_turret_keep_radius
-			if retreating or (closest_distance < auto_turret_max_distance and closest_distance > auto_turret_keep_radius) or INFO.nav_x ~= nil then
+			-- (a kamikaze doesn't keep its distance, it goes straight in)
+			local retreating = fleeing or (not INFO.kamikaze and closest_object ~= nil and closest_distance < auto_turret_keep_radius)
+			local accel = auto_turret_acceleration
+			if retreating or (closest_distance < auto_turret_max_distance and (INFO.kamikaze or closest_distance > auto_turret_keep_radius)) or INFO.nav_x ~= nil then
 				local move_x, move_y, move_z = rot_x, rot_y, rot_z
-				local speed_mult = 1
+				local speed_mult = INFO.kamikaze and auto_turret_kamikaze_speed or 1
+				accel = auto_turret_acceleration * speed_mult
 				if retreating then
-					move_x, move_y, move_z = -rot_x, -rot_y, -rot_z
-					-- the deeper inside the radius, the harder it backs off
-					local depth = (auto_turret_keep_radius - closest_distance) / auto_turret_keep_radius
+					if fleeing and closest_object == nil then
+						-- lost sight of it, keep running the way it was last seen
+						move_x, move_y, move_z = INFO.flee_x, INFO.flee_y, INFO.flee_z
+					else
+						move_x, move_y, move_z = -rot_x, -rot_y, -rot_z
+					end
+
+					-- the deeper inside the radius, the harder it backs off. fleeing is always full speed
+					local depth = 1
+					if not fleeing then
+						depth = (auto_turret_keep_radius - closest_distance) / auto_turret_keep_radius
+					end
 					speed_mult = 1 + depth * auto_turret_retreat_boost
+					accel = auto_turret_acceleration * speed_mult
+
+					-- something in the way: slide around it (sideways and up) instead of running into it
+					if fleeing then
+						local hit, x3, y3, z3, hit_id = intersect(x, y, z, 6 * move_x, 6 * move_y, 6 * move_z, ID)
+						if x3 ~= nil and DistanceFormula(x, y, z, x3, y3, z3) < 4 then
+							local side = 1
+							if ID % 2 == 0 then
+								side = -1
+							end
+							move_x, move_y, move_z = move_x - move_y * side, move_y + move_x * side, move_z + 0.7
+							local len = math.sqrt(move_x * move_x + move_y * move_y + move_z * move_z)
+							if len > 0 then
+								move_x, move_y, move_z = move_x / len, move_y / len, move_z / len
+							end
+						end
+					end
 				end
 
 				-- this part makes drone move faster when there is nothing in front of it
@@ -559,15 +646,29 @@ function DroneAI()
 				INFO.wanted_vel_z = z_velocity
 
 				-- limit velocity
-				if INFO.wanted_vel_x > auto_turret_max_vel then
-					INFO.wanted_vel_x = auto_turret_max_vel
-				elseif INFO.wanted_vel_x < -auto_turret_max_vel then
-					INFO.wanted_vel_x = -auto_turret_max_vel
-				end
-				if INFO.wanted_vel_y > auto_turret_max_vel then
-					INFO.wanted_vel_y = auto_turret_max_vel
-				elseif INFO.wanted_vel_y < -auto_turret_max_vel then
-					INFO.wanted_vel_y = -auto_turret_max_vel
+				if retreating then
+					-- the whole vector is capped (so the direction isn't bent) and the cap scales with the retreat
+					-- speed, otherwise a drone backing away could never get past the normal max speed
+					local max_speed = auto_turret_max_vel * speed_mult
+					local wanted_speed = math.sqrt(x_velocity * x_velocity + y_velocity * y_velocity + z_velocity * z_velocity)
+					if wanted_speed > max_speed then
+						local scale = max_speed / wanted_speed
+						INFO.wanted_vel_x = x_velocity * scale
+						INFO.wanted_vel_y = y_velocity * scale
+						INFO.wanted_vel_z = z_velocity * scale
+					end
+				else
+					local max_xy = auto_turret_max_vel * speed_mult
+					if INFO.wanted_vel_x > max_xy then
+						INFO.wanted_vel_x = max_xy
+					elseif INFO.wanted_vel_x < -max_xy then
+						INFO.wanted_vel_x = -max_xy
+					end
+					if INFO.wanted_vel_y > max_xy then
+						INFO.wanted_vel_y = max_xy
+					elseif INFO.wanted_vel_y < -max_xy then
+						INFO.wanted_vel_y = -max_xy
+					end
 				end
 			else
 				INFO.wanted_vel_x = 0
@@ -575,52 +676,74 @@ function DroneAI()
 				INFO.wanted_vel_z = 0
 			end
 
-			if INFO.wanted_vel_x > x_vel_current then
-				if INFO.wanted_vel_x > x_vel_current + auto_turret_acceleration then
-					write_float(object + 0x68, x_vel_current + auto_turret_acceleration)
-				else
-					write_float(object + 0x68, INFO.wanted_vel_x)
-				end
-			else
-				if INFO.wanted_vel_x < x_vel_current - auto_turret_acceleration then
-					write_float(object + 0x68, x_vel_current - auto_turret_acceleration)
-				else
-					write_float(object + 0x68, INFO.wanted_vel_x)
-				end
-			end
-
-			if INFO.wanted_vel_y > y_vel_current then
-				if INFO.wanted_vel_y > y_vel_current + auto_turret_acceleration then
-					write_float(object + 0x6C, y_vel_current + auto_turret_acceleration)
-				else
-					write_float(object + 0x6C, INFO.wanted_vel_y)
-				end
-			else
-				if INFO.wanted_vel_y < y_vel_current - auto_turret_acceleration then
-					write_float(object + 0x6C, y_vel_current - auto_turret_acceleration)
-				else
-					write_float(object + 0x6C, INFO.wanted_vel_y)
-				end
-			end
-
-			if INFO.wanted_vel_z > z_vel_current then
-				if INFO.wanted_vel_z > z_vel_current + auto_turret_acceleration then
-					write_float(object + 0x70, z_vel_current + auto_turret_acceleration)
-				else
-					write_float(object + 0x70, INFO.wanted_vel_z)
-				end
-			else
-				if INFO.wanted_vel_z < z_vel_current - auto_turret_acceleration then
-					write_float(object + 0x70, z_vel_current - auto_turret_acceleration)
-				else
-					write_float(object + 0x70, INFO.wanted_vel_z)
-				end
-			end
+			ApproachVelocity(object + 0x68, x_vel_current, INFO.wanted_vel_x, accel)
+			ApproachVelocity(object + 0x6C, y_vel_current, INFO.wanted_vel_y, accel)
+			ApproachVelocity(object + 0x70, z_vel_current, INFO.wanted_vel_z, accel)
 
 			PushDroneAway(object, ID)
 			::drone_end::
 		end
 	end
+end
+
+-- Kamikaze drone reached its target: a rocket spawned on the target makes the explosion, and the drone goes with it
+function DetonateDrone(ID, INFO, target, rx, ry, rz)
+	local tx, ty, tz = GetTargetBodyPosition(target)
+	spawn_projectile(auto_turret_kamikaze_tag, 0xFFFFFFFF, tx - rx * 0.4, ty - ry * 0.4, tz - rz * 0.4, rx, ry, rz)
+	KillDrone(ID, INFO)
+end
+
+-- Rotates direction f toward direction d by at most max_angle radians, returns the new unit direction.
+function TurnToward(fx, fy, fz, dx, dy, dz, max_angle)
+	local flen = math.sqrt(fx * fx + fy * fy + fz * fz)
+	local dlen = math.sqrt(dx * dx + dy * dy + dz * dz)
+	if dlen < 0.0001 then
+		return fx, fy, fz
+	end
+	dx, dy, dz = dx / dlen, dy / dlen, dz / dlen
+	if flen < 0.0001 then
+		return dx, dy, dz
+	end
+	fx, fy, fz = fx / flen, fy / flen, fz / flen
+
+	local dot = fx * dx + fy * dy + fz * dz
+	if dot > 1 then
+		dot = 1
+	elseif dot < -1 then
+		dot = -1
+	end
+	local angle = math.acos(dot)
+	if angle <= max_angle then
+		return dx, dy, dz
+	end
+
+	-- rotate around the axis perpendicular to both. Facing exactly away has no single axis, so turn around the vertical
+	local ax, ay, az = fy * dz - fz * dy, fz * dx - fx * dz, fx * dy - fy * dx
+	local alen = math.sqrt(ax * ax + ay * ay + az * az)
+	if alen < 0.0001 then
+		if math.abs(fz) < 0.99 then
+			ax, ay, az, alen = 0, 0, 1, 1 -- spin around the vertical like a turn on the spot
+		else
+			ax, ay, az, alen = 1, 0, 0, 1 -- facing straight up or down, any sideways axis will do
+		end
+	end
+	ax, ay, az = ax / alen, ay / alen, az / alen
+
+	-- Rodrigues' rotation of f around the axis
+	local c, s = math.cos(max_angle), math.sin(max_angle)
+	local cx, cy, cz = ay * fz - az * fy, az * fx - ax * fz, ax * fy - ay * fx
+	local k = (ax * fx + ay * fy + az * fz) * (1 - c)
+	return fx * c + cx * s + ax * k, fy * c + cy * s + ay * k, fz * c + cz * s + az * k
+end
+
+-- moves one axis of the drone's velocity toward the wanted value by at most accel per tick
+function ApproachVelocity(address, current, wanted, accel)
+	if wanted > current + accel then
+		wanted = current + accel
+	elseif wanted < current - accel then
+		wanted = current - accel
+	end
+	write_float(address, wanted)
 end
 
 function OnTick()
@@ -740,6 +863,7 @@ function PlaceTurret(x, y, z)
 	if turret_object ~= 0 and read_dword(turret_object + 0x98) ~= 0 then
 		TURRETS[ID] = {}
 		TURRETS[ID].lifetime = auto_turret_lifetime
+		TURRETS[ID].kamikaze = auto_turret_kamikaze_tag ~= nil and math.random() < auto_turret_kamikaze_chance
 		TURRETS[ID].rate_of_fire = auto_turret_rate_of_fire
 		TURRETS[ID].x = x
 		TURRETS[ID].y = y
