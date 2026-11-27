@@ -379,7 +379,8 @@ function DroneAI()
 						local intersection_distance_to_target = DistanceFormula(x2, y2, z2, x3, y3, z3)
 						local vehicle_id = read_dword(player + 0x11C)
 						local in_vehicle = vehicle_id ~= 0xFFFFFFFF and get_object_memory(vehicle_id) ~= 0
-						local los_tolerance = in_vehicle and 6.0 or 3.0
+						-- a kamikaze needs a properly clear line, otherwise it charges at somebody behind a wall
+						local los_tolerance = INFO.kamikaze and 1.0 or (in_vehicle and 6.0 or 3.0)
 						if distance < closest_distance and (intersection_distance_to_target < los_tolerance or (in_vehicle and hit_id == vehicle_id)) then
 							closest_distance = distance
 							closest_object = player
@@ -586,6 +587,7 @@ function DroneAI()
 			-- (a kamikaze doesn't keep its distance, it goes straight in)
 			local retreating = fleeing or (not INFO.kamikaze and closest_object ~= nil and closest_distance < auto_turret_keep_radius)
 			local accel = auto_turret_acceleration
+			local blocked = false -- a kamikaze with a wall in front of it stops instead of pushing into it
 			if retreating or (closest_distance < auto_turret_max_distance and (INFO.kamikaze or closest_distance > auto_turret_keep_radius)) or INFO.nav_x ~= nil then
 				local move_x, move_y, move_z = rot_x, rot_y, rot_z
 				local speed_mult = INFO.kamikaze and auto_turret_kamikaze_speed or 1
@@ -628,7 +630,24 @@ function DroneAI()
 				if not retreating then
 					local hit, x3, y3, z3, hit_id = intersect(x, y, z, 15 * move_x, 15 * move_y, 15 * move_z, ID)
 					if x3 ~= nil then
-						distance_to_aim_location = DistanceFormula(x, y, z, x3, y3, z3) * 0.1 - 0.5
+						local ahead = DistanceFormula(x, y, z, x3, y3, z3)
+						if INFO.kamikaze then
+							-- obstacles that aren't its target. the stopping distance grows with its current speed
+							local hits_target = false
+							if closest_object ~= nil then
+								local target_player_id = read_dword(get_player(closest_index) + 0x34)
+								local target_vehicle_id = read_dword(closest_object + 0x11C)
+								hits_target = hit_id == target_player_id or hit_id == target_vehicle_id
+							end
+							local speed = math.sqrt(x_vel_current * x_vel_current + y_vel_current * y_vel_current + z_vel_current * z_vel_current)
+							if not hits_target and ahead < 1 + speed * 8 then
+								blocked = true
+								if closest_object == nil then
+									INFO.idle_timer = 0 -- pick a different way to wander
+								end
+							end
+						end
+						distance_to_aim_location = ahead * 0.1 - 0.5
 						if distance_to_aim_location < 0 then
 							distance_to_aim_location = 0
 						elseif distance_to_aim_location > 15 then
@@ -674,6 +693,13 @@ function DroneAI()
 				INFO.wanted_vel_x = 0
 				INFO.wanted_vel_y = 0
 				INFO.wanted_vel_z = 0
+			end
+
+			if blocked then
+				INFO.wanted_vel_x = 0
+				INFO.wanted_vel_y = 0
+				INFO.wanted_vel_z = 0
+				accel = auto_turret_acceleration * 3 -- brake harder than it accelerates
 			end
 
 			ApproachVelocity(object + 0x68, x_vel_current, INFO.wanted_vel_x, accel)
